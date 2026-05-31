@@ -117,7 +117,17 @@ initial begin
     end
 end
 
-    parameter MEMORY_DEPTH  = 32'hFFF;
+    // -----------------------------------------------------------------------
+    // FIX (Test 39 'ld_st' watchdog timeout):
+    // The original 0xFFF (4096-word / 16 KB) array was too small. The
+    // 'rv32ui-p-ld_st' test places its begin_signature at byte address 0x4000
+    // (word index 0x1000), one past the end of the old array. Out-of-range
+    // Verilog memory accesses return X for reads and silently drop writes,
+    // which made the load return X, propagated X into the PC, and hung the
+    // pipeline. Sizing the array to 0x3FFF (16384 words / 64 KB) safely
+    // covers begin_signature/tdat areas of every test in the suite.
+    // -----------------------------------------------------------------------
+    parameter MEMORY_DEPTH  = 32'h3FFF;
     reg [31:0] MEMORY [0:MEMORY_DEPTH];
     integer i;
 

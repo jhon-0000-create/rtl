@@ -153,6 +153,10 @@ module mpt_MEM_stage
             `MEM_SW: begin
                 DMEM_wr_data_o = wr_data;
                 byte_en        = 4'b1111; // Activate all four byte-lane strobe lines
+                // FIX: SW must be word-aligned (offset 2'b00). Any other lower
+                // address bits represent an unaligned store and must trap.
+                if (EX_mem_wr_en_i && (EX_alu_result_i[1:0] != 2'b00))
+                    misaligned_store = 1;
             end
 
             // Store Byte (8-bit): Shift the isolated bottom byte into the correct slot 
@@ -191,11 +195,24 @@ module mpt_MEM_stage
                     end
                     // TRAP TRIGGER: mpt does not support unaligned accesses. 
                     // Storing a half-word at an odd index (2'b01 or 2'b11) trips the error flag.
-                    default: misaligned_store  = 1;
+                    default: if (EX_mem_wr_en_i) misaligned_store = 1;
                 endcase 
             end   
 
         endcase
+
+        // FIX: Misaligned-load detection. The original code declared the
+        // 'misaligned_load' flag but never asserted it, so misaligned LH/LW
+        // silently returned wrong data instead of trapping. We now flag any
+        // halfword load whose offset is odd (LSB == 1) and any word load
+        // whose offset is not 2'b00 as misaligned, matching RV32I semantics.
+        if (EX_mem_rd_en_i) begin
+            case (EX_mem_op_i)
+                `MEM_LH, `MEM_LH_U: if (EX_alu_result_i[0]    != 1'b0) misaligned_load = 1;
+                `MEM_LW:            if (EX_alu_result_i[1:0]  != 2'b00) misaligned_load = 1;
+                default: ; // LB/LBU are byte-granular: always aligned
+            endcase
+        end
     end
     
 
