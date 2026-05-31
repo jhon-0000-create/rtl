@@ -3,19 +3,19 @@
 %==============================================================================
 \documentclass[11pt,a4paper,oneside]{report}
 
-% ---- Geometrie / espacement -------------------------------------------------
+%  -- - Geometrie / espacement  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- -
 \usepackage[a4paper,left=2.8cm,right=2.8cm,top=2.6cm,bottom=2.8cm]{geometry}
 \usepackage{setspace}
 \onehalfspacing
 
-% ---- Encodage / polices -----------------------------------------------------
+%  -- - Encodage / polices  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- --
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage[french]{babel}
 \usepackage{microtype}
 
-% ---- Maths / graphiques / tableaux ------------------------------------------
+%  -- - Maths / graphiques / tableaux  --  --  --  --  --  --  --  --  --  --  --  --  --  -- 
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -25,13 +25,13 @@
 \usepackage{float}
 \usepackage{siunitx}
 
-% ---- Mise en forme des chapitres / sections ---------------------------------
+%  -- - Mise en forme des chapitres / sections  --  --  --  --  --  --  --  --  --  --  -- 
 \usepackage{titlesec}
 \titleformat{\chapter}[display]
   {\normalfont\Large\bfseries}{Chapitre \thechapter}{0.6em}{\Huge}
 \titlespacing*{\chapter}{0pt}{-30pt}{20pt}
 
-% ---- Listings (Verilog) avec coloration syntaxique avancée ------------------
+%  -- - Listings (Verilog) avec coloration syntaxique avancée  --  --  --  --  --  -- 
 \usepackage{listings}
 \usepackage{xcolor}
 
@@ -75,7 +75,7 @@
   aboveskip=1em, belowskip=1em
 }
 
-% ---- Hyperliens / references ------------------------------------------------
+%  -- - Hyperliens / references  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- 
 \usepackage{hyperref}
 \hypersetup{
   colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue!50!black,
@@ -88,7 +88,7 @@
 %==============================================================================
 \begin{document}
 
-% ---- Pages liminaires (numerotation romaine) --------------------------------
+%  -- - Pages liminaires (numerotation romaine)  --  --  --  --  --  --  --  --  --  -- --
 \pagenumbering{roman}
 
 \begin{titlepage}
@@ -129,10 +129,8 @@ de gestion des aléas, les interfaces Verilog de chaque module et
 les résultats de la vérification.
 
 \tableofcontents
-\listoffigures
-\listoftables
 
-% ---- Corps du rapport (numerotation arabe) ----------------------------------
+%  -- - Corps du rapport (numerotation arabe)  --  --  --  --  --  --  --  --  --  --  -- -
 \clearpage
 \pagenumbering{arabic}
 
@@ -148,8 +146,8 @@ ouvert et libre pour la conception de processeurs, offrant une
 alternative claire, modulaire et extensible aux jeux d'instructions
 propriétaires qui dominent depuis longtemps les marchés de
 l'embarqué et du calcul généraliste. Son sous-ensemble entier de
-base, RV32I, est volontairement réduit---moins de cinquante
-instructions---tout en restant suffisant pour supporter un modèle
+base, RV32I, est volontairement réduit -- moins de cinquante
+instructions -- tout en restant suffisant pour supporter un modèle
 de programmation généraliste complet ainsi que les chaînes de
 compilation modernes, les noyaux de système d'exploitation et les
 suites de tests de référence. La conjonction de l'ouverture, de la
@@ -265,20 +263,18 @@ ou d'un pont vers une matrice de périphériques.
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Schéma bloc de plus haut niveau du processeur montrant les
-  entrées-sorties de \texttt{mpt\_top}, les interfaces IMEM et DMEM,
-  l'entrée d'adresse de démarrage et la sortie \texttt{exception\_o}.}
+  \includegraphics[width=0.9\textwidth]{fig2.1.png}
+  \caption{Schema bloc de plus haut niveau du processeur montrant les
+  entrees-sorties de \texttt{mpt\_top}, les interfaces IMEM et DMEM,
+  l'entree d'adresse de demarrage et la sortie \texttt{exception\_o}.}
   \label{fig:top-level}
 \end{figure}
 
 \section{Hiérarchie des modules}
 En interne, \texttt{mpt\_top} instancie un module par étage du
-pipeline---\texttt{mpt\_IF\_stage}, \texttt{mpt\_ID\_stage},
+pipeline -- \texttt{mpt\_IF\_stage}, \texttt{mpt\_ID\_stage},
 \texttt{mpt\_EX\_stage}, \texttt{mpt\_MEM\_stage} et
-\texttt{mpt\_WB\_stage}---ainsi qu'un petit nombre de blocs
+\texttt{mpt\_WB\_stage} -- ainsi qu'un petit nombre de blocs
 combinatoires partagés. \texttt{mpt\_decoder} et
 \texttt{mpt\_control} produisent conjointement le mot de contrôle
 propre à chaque instruction à partir du mot de 32 bits.
@@ -295,16 +291,7 @@ paramètres sont centralisés dans le fichier d'en-tête
 toute modification d'un opcode ou d'une largeur se propage de
 façon cohérente à l'ensemble de la conception.
 
-\begin{figure}[H]
-  \centering
-  \rule{0.85\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{0.85\textwidth}{0.4pt}
-  \caption{Hiérarchie des modules de \texttt{mpt\_top}, listant les cinq
-  modules d'étage et les blocs partagés de décodage, de contrôle, de banc
-  de registres, d'ALU et de génération de branchements.}
-  \label{fig:hierarchy}
-\end{figure}
+
 
 
 \section{Aperçu du chemin de données}
@@ -314,9 +301,9 @@ l'IMEM et le mot retourné est verrouillé dans le registre
 pipeline IF/ID. À l'étage ID, l'instruction est décodée,
 l'immédiat est étendu par signe ou par zéro selon son format
 (I/S/B/U/J), et les deux opérandes source sont lus dans le banc
-de registres. À l'étage EX, l'ALU combine ses opérandes---
+de registres. À l'étage EX, l'ALU combine ses opérandes -- 
 choisis parmi les sorties du banc de registres, l'immédiat et les
-valeurs renvoyées---pour calculer soit un résultat arithmétique,
+valeurs renvoyées -- pour calculer soit un résultat arithmétique,
 soit une adresse mémoire effective ; en parallèle,
 \texttt{mpt\_branchgen} évalue la condition de branchement et
 calcule l'adresse cible. À l'étage MEM, les chargements et les
@@ -324,19 +311,10 @@ calcule l'adresse cible. À l'étage MEM, les chargements et les
 approprié ; les chargements sous-mot (\texttt{LB}, \texttt{LH},
 \texttt{LBU}, \texttt{LHU}) sont étendus par signe ou par zéro
 sur la largeur complète d'un registre. Enfin, à l'étage WB, le
-résultat---sortie de l'ALU, donnée chargée ou adresse de retour
-$\texttt{PC}+4$---est écrit en retour dans le banc de registres.
+résultat -- sortie de l'ALU, donnée chargée ou adresse de retour
+$\texttt{PC}+4$ -- est écrit en retour dans le banc de registres.
 
-\begin{figure}[H]
-  \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Chemin de données pipeliné du c\oe{}ur RV32I montrant les étages
-  IF, ID, EX, MEM et WB, les quatre registres pipeline inter-étages ainsi
-  que les multiplexeurs principaux.}
-  \label{fig:datapath}
-\end{figure}
+
 
 \section{Aperçu du chemin de contrôle}
 Les signaux de contrôle sont produits une seule fois par
@@ -356,16 +334,7 @@ signaux \texttt{stall\_IF\_ID}, \texttt{flush\_IF\_ID},
 \texttt{flush\_EX} ainsi que les sélecteurs de renvoi
 \texttt{forwardA}, \texttt{forwardB} et \texttt{forwardM}.
 
-\begin{figure}[H]
-  \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Chemin de contrôle montrant la génération du mot de contrôle à
-  l'étage ID puis sa propagation à travers les registres pipeline ID/EX,
-  EX/MEM et MEM/WB.}
-  \label{fig:controlpath}
-\end{figure}
+
 
 \section{Interfaces mémoire}
 Les deux ports mémoire sont adressés par mot et larges de 32
@@ -416,8 +385,8 @@ Le module \texttt{mpt\_IF\_stage} héberge le compteur ordinal
 à la mémoire d'instructions et de registre architectural du PC. À
 chaque front montant de \texttt{clk\_i}, le module met à jour
 \texttt{IMEM\_addr\_o}, puis recopie son ancienne valeur dans
-\texttt{IF\_pc\_o}. Cette duplication apparente---deux registres
-représentant le PC---est en réalité essentielle au pipeline : elle
+\texttt{IF\_pc\_o}. Cette duplication apparente -- deux registres
+représentant le PC -- est en réalité essentielle au pipeline : elle
 permet de propager vers ID l'adresse de l'instruction réellement
 fetchée pendant que IF est déjà en train de calculer l'adresse de
 l'instruction suivante.
@@ -426,15 +395,15 @@ l'instruction suivante.
 Le c\oe{}ur de l'étage est un multiplexeur 4-vers-1
 combinatoire qui sélectionne la valeur de \texttt{pc\_next} :
 \begin{enumerate}
-  \item priorité~1 : \texttt{ID\_jump\_en\_i} actif --- saut
+  \item priorité~1 : \texttt{ID\_jump\_en\_i} actif  --  saut
         inconditionnel (\texttt{JAL} ou \texttt{JALR}) résolu en
         ID, le PC suivant est l'adresse cible
         \texttt{BG\_pc\_dest\_i} fournie par le générateur de
         branchement ;
-  \item priorité~2 : \texttt{EX\_branch\_en\_i} actif ---
+  \item priorité~2 : \texttt{EX\_branch\_en\_i} actif  -- 
         branchement conditionnel pris confirmé en EX, le PC
         suivant est \texttt{EX\_pc\_dest\_i} ;
-  \item priorité~3 : \texttt{stall\_i} actif --- aléa
+  \item priorité~3 : \texttt{stall\_i} actif  --  aléa
         charge-utilisation, on doit recharger l'instruction
         courante, donc \texttt{pc\_next = IMEM\_addr\_o - 4} ;
   \item cas par défaut : avancement séquentiel
@@ -475,12 +444,10 @@ notre flot, de sorte que le testbench fournit
 
 \begin{figure}[H]
   \centering
-  \rule{0.9\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{0.9\textwidth}{0.4pt}
-  \caption{Détail de l'étage IF montrant le multiplexeur 4-vers-1
-  d'entrée du PC, la duplication \texttt{IMEM\_addr\_o}/\texttt{IF\_pc\_o}
-  et le multiplexeur d'injection de NOP piloté par \texttt{flush\_i}.}
+  \includegraphics[width=0.9\textwidth]{fig3.1.png}
+  \caption{Detail de l'etage IF montrant le multiplexeur 4-vers-1
+  d'entree du PC, la duplication \texttt{IMEM\_addr\_o}/\texttt{IF\_pc\_o}
+  et le multiplexeur d'injection de NOP pilote par \texttt{flush\_i}.}
   \label{fig:if-stage}
 \end{figure}
 
@@ -641,15 +608,13 @@ décodée, et que cette écriture porte sur un registre non nul,
 \texttt{ID\_rs1\_data\_o} ou \texttt{ID\_rs2\_data\_o} reçoit
 combinatoirement \texttt{WB\_rd\_wr\_data\_i}. Ce mécanisme évite
 qu'une donnée venant d'être écrite par WB et lue le même cycle ne
-soit obsolète---l'écriture étant synchrone, elle ne sera visible
+soit obsolète -- l'écriture étant synchrone, elle ne sera visible
 au tableau mémoire qu'au cycle suivant.
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Architecture interne de l'étage ID montrant le décodeur, le
+  \includegraphics[width=0.9\textwidth]{fig3.2.png}
+  \caption{Architecture interne de l'etage ID montrant le decodeur, le
   banc de registres, les trois toujours-blocs synchrones et le multiplexeur
   de renvoi ID-WB.}
   \label{fig:id-stage}
@@ -714,6 +679,15 @@ décodage suivante au front d'horloge :
         la comparaison est fausse (\texttt{BNE}, \texttt{BGE},
         \texttt{BGEU}).
 \end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig3.3.png}
+  \caption{Architecture interne de l'etage EX montrant les multiplexeurs
+  d'operande a 3 voies, l'ALU, le generateur de branchement et la
+  propagation des signaux de controle vers la frontiere EX/MEM.}
+  \label{fig:ex-stage}
+\end{figure}
 
 
 \section{ALU -- \texttt{mpt\_alu}}
@@ -842,10 +816,8 @@ spécifiquement sur l'opérande de \texttt{JALR}.
 
 \begin{figure}[H]
   \centering
-  \rule{0.85\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{0.85\textwidth}{0.4pt}
-  \caption{Vue interne de \texttt{mpt\_branchgen} faisant apparaître le
+  \includegraphics[width=0.85\textwidth]{fig3.4.png}
+  \caption{Vue interne de \texttt{mpt\_branchgen} faisant apparaitre le
   multiplexeur \texttt{PC\_RELATIVE}/\texttt{REG\_OFFSET}, l'additionneur
   32~bits et le renvoi local pour \texttt{JALR}.}
   \label{fig:branchgen}
@@ -891,10 +863,10 @@ $(\texttt{EX\_mem\_op\_i}, \texttt{EX\_alu\_result\_i[1:0]})$.
 Instruction & Offset & Masque & Position de la donnée \\
 \midrule
 \texttt{SW} & \texttt{2'b00}   & \texttt{4'b1111} & \texttt{[31:0]} \\
-\texttt{SW} & autre            & --- & déclenche \texttt{misaligned\_store} \\
+\texttt{SW} & autre            &  --  & déclenche \texttt{misaligned\_store} \\
 \texttt{SH} & \texttt{2'b00}   & \texttt{4'b0011} & \texttt{[15:0]} \\
 \texttt{SH} & \texttt{2'b10}   & \texttt{4'b1100} & \texttt{[31:16]} \\
-\texttt{SH} & autre            & --- & déclenche \texttt{misaligned\_store} \\
+\texttt{SH} & autre            &  --  & déclenche \texttt{misaligned\_store} \\
 \texttt{SB} & \texttt{2'b00}   & \texttt{4'b0001} & \texttt{[7:0]} \\
 \texttt{SB} & \texttt{2'b01}   & \texttt{4'b0010} & \texttt{[15:8]} \\
 \texttt{SB} & \texttt{2'b10}   & \texttt{4'b0100} & \texttt{[23:16]} \\
@@ -934,11 +906,9 @@ Cette logique sera examinée plus en détail au \cref{ch:hazards}.
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Vue de l'étage MEM montrant la décomposition adresse/donnée,
-  les générateurs de \texttt{DMEM\_wr\_byte\_en\_o}, l'unité d'extraction
+  \includegraphics[width=0.9\textwidth]{fig3.5.png}
+  \caption{Vue de l'etage MEM montrant la decomposition adresse/donnee,
+  les generateurs de \texttt{DMEM\_wr\_byte\_en\_o}, l'unite d'extraction
   et d'extension, ainsi que le multiplexeur \texttt{ForwardM}.}
   \label{fig:mem-stage}
 \end{figure}
@@ -969,6 +939,15 @@ réinjectée dans l'étage ID via le réseau de renvoi interne
 ID-WB et, dans l'étage EX, via la branche \texttt{forwardX = 2'b01}
 des multiplexeurs d'opérande.
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{fig3.6.png}
+  \caption{Architecture de l'etage WB montrant le multiplexeur 2-vers-1
+  pilote par \texttt{MEM\_memtoreg\_i} et le chemin de retour vers le
+  banc de registres.}
+  \label{fig:wb-stage}
+\end{figure}
+
 %==============================================================================
 \chapter{Gestion des aléas}
 \label{ch:hazards}
@@ -988,7 +967,7 @@ La troisième, l'\emph{aléa de contrôle}, naît des branchements et
 des sauts dont la cible n'est connue qu'après le cycle de fetch
 suivant ; les instructions fetchées spéculativement après le
 branchement doivent être annulées si la branche est prise. Les
-trois mécanismes correspondants---renvoi, blocage et vidage---sont
+trois mécanismes correspondants -- renvoi, blocage et vidage -- sont
 centralisés dans \texttt{mpt\_control}.
 
 
@@ -999,11 +978,11 @@ centralisés dans \texttt{mpt\_control}.
 Les sorties \texttt{forwardA\_o} et \texttt{forwardB\_o} sont des
 sélecteurs sur deux bits dont la sémantique est :
 \begin{description}
-  \item[\texttt{2'b00}] aucun aléa --- les opérandes proviennent
+  \item[\texttt{2'b00}] aucun aléa  --  les opérandes proviennent
         de l'étage ID ou de l'immédiat ;
-  \item[\texttt{2'b10}] aléa EX --- la donnée provient de la
+  \item[\texttt{2'b10}] aléa EX  --  la donnée provient de la
         sortie EX/MEM \texttt{EX\_alu\_result\_o} ;
-  \item[\texttt{2'b01}] aléa MEM/WB --- la donnée provient du
+  \item[\texttt{2'b01}] aléa MEM/WB  --  la donnée provient du
         bus \texttt{WB\_rd\_wr\_data\_i}.
 \end{description}
 
@@ -1081,7 +1060,7 @@ asserté, trois actions se produisent simultanément :
   \item l'étage IF rejoue \texttt{IMEM\_addr\_o - 4} (cf.\
         \cref{sec:if}), ce qui revient à figer le PC ;
   \item l'étage ID gèle son registre pipeline mais force les
-        autorisations destructives à zéro---c'est l'injection de
+        autorisations destructives à zéro -- c'est l'injection de
         bulle décrite à la \cref{sec:id} ;
   \item l'étage EX traite la bulle exactement comme une
         instruction inoffensive ; le \texttt{LW} bloqué un cycle
@@ -1092,12 +1071,10 @@ asserté, trois actions se produisent simultanément :
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Diagramme de chronogramme illustrant un aléa charge-utilisation :
-  trois cycles successifs montrant le \texttt{LW}, la bulle insérée, et le
-  renvoi MEM/WB résolvant la dépendance.}
+  \includegraphics[width=0.9\textwidth]{fig4.1.png}
+  \caption{Diagramme de chronogramme illustrant un alea charge-utilisation :
+  trois cycles successifs montrant le \texttt{LW}, la bulle inseree, et le
+  renvoi MEM/WB resolvant la dependance.}
   \label{fig:stall-timing}
 \end{figure}
 
@@ -1156,16 +1133,7 @@ Conjugués au mécanisme central, ces renvois locaux suffisent à
 maintenir \texttt{mpt\_control} dans une logique purement
 combinatoire en dehors du flip-flop \texttt{IF\_ID\_Flush2}.
 
-\begin{figure}[H]
-  \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Vue synthétique de la stratégie d'aléas, montrant les sources de
-  \texttt{forwardA}, \texttt{forwardB} et \texttt{forwardM}, le chemin de
-  \texttt{stall\_o}, et la fenêtre de \textit{flush} sur deux cycles.}
-  \label{fig:hazard-overview}
-\end{figure}
+
 
 
 %==============================================================================
@@ -1430,7 +1398,7 @@ la sortie standard :
 Sur les 42 tests de la suite officielle, \textbf{40 passent avec
 succès}. Deux tests échouent :
 \begin{itemize}
-  \item \textbf{Test~39} (\texttt{rv32ui-p-ld\_st}) --- échec par
+  \item \textbf{Test~39} (\texttt{rv32ui-p-ld\_st})  --  échec par
         dépassement du watchdog (\textit{PIPELINE HUNG}). Ce test
         exerce des séquences intensives de chargements et de
         stockages consécutifs vers la même zone mémoire. L'analyse
@@ -1444,7 +1412,7 @@ succès}. Deux tests échouent :
         priorité supplémentaire dans \texttt{mpt\_control} pour
         détecter ce cas triangulaire et forcer le déblocage après
         un cycle.
-  \item \textbf{Test~41} (\texttt{rv32ui-p-ma\_data}) --- échec par
+  \item \textbf{Test~41} (\texttt{rv32ui-p-ma\_data})  --  échec par
         exception matérielle (\textit{HARDWARE EXCEPTION TRAP}). Ce
         test vérifie intentionnellement le comportement du
         processeur face à des accès mémoire mal alignés
@@ -1518,28 +1486,24 @@ typiquement entre quelques centaines (par exemple \texttt{add},
 \texttt{sw}). Le watchdog à $10^5$ cycles laisse une marge
 confortable d'environ deux ordres de grandeur, ce qui permet
 d'exclure les blocages éventuels sans pour autant tolérer
-silencieusement une boucle infinie --- comme l'illustre
+silencieusement une boucle infinie  --  comme l'illustre
 précisément le cas du test~39.
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
-  \caption{Capture d'écran de la sortie du testbench en mode
-  \texttt{+runall} affichant les 42 verdicts \texttt{[PASS]} et le
-  récapitulatif final.}
+  \includegraphics[width=0.9\textwidth]{fig5.1.png}
+  \caption{Capture d'ecran de la sortie du testbench en mode
+  \texttt{+runall} affichant les 42 verdicts et le
+  recapitulatif final.}
   \label{fig:regression-output}
 \end{figure}
 
 \begin{figure}[H]
   \centering
-  \rule{\textwidth}{0.4pt}\\[2cm]
-  \textit{[Insérer image ici]}\\[2cm]
-  \rule{\textwidth}{0.4pt}
+  \includegraphics[width=0.9\textwidth]{fig5.2.png}
   \caption{Forme d'onde GTKWave d'un test typique (\texttt{rv32ui-p-add})
-  montrant la montée de \texttt{x3}, \texttt{x17} et \texttt{x10} aux
-  valeurs de signature de succès.}
+  montrant la montee de \texttt{x3}, \texttt{x17} et \texttt{x10} aux
+  valeurs de signature de succes.}
   \label{fig:gtkwave}
 \end{figure}
 
@@ -1676,61 +1640,61 @@ rapport. Chaque entrée est réservée pour une description technique
 détaillée de la figure correspondante.
 
 \begin{description}
-  \item[Figure 1 --- Schéma bloc de plus haut niveau.]\hfill\\
+  \item[Figure 1  --  Schéma bloc de plus haut niveau.]\hfill\\
         Entrées-sorties de plus haut niveau, interfaces IMEM/DMEM,
         chemin de l'adresse de démarrage, sortie
         \texttt{exception\_o}.
 
-  \item[Figure 2 --- Hiérarchie des modules de
+  \item[Figure 2  --  Hiérarchie des modules de
         \texttt{mpt\_top}.]\hfill\\
         Modules d'étage et blocs partagés (décodage, contrôle, banc
         de registres, ALU, génération de branchements).
 
-  \item[Figure 3 --- Chemin de données pipeliné.]\hfill\\
+  \item[Figure 3  --  Chemin de données pipeliné.]\hfill\\
         Chemin de données à cinq étages, registres pipeline
         inter-étages, multiplexeurs de renvoi.
 
-  \item[Figure 4 --- Chemin de contrôle.]\hfill\\
+  \item[Figure 4  --  Chemin de contrôle.]\hfill\\
         Génération du mot de contrôle à l'étage ID, propagation à
         travers les registres pipeline ID/EX, EX/MEM et MEM/WB.
 
-  \item[Figure 5 --- Détail de l'étage IF.]\hfill\\
+  \item[Figure 5  --  Détail de l'étage IF.]\hfill\\
         Multiplexeur 4-vers-1 d'entrée du PC, duplication
         \texttt{IMEM\_addr\_o}/\texttt{IF\_pc\_o}, multiplexeur
         d'injection de NOP par \texttt{flush\_i}.
 
-  \item[Figure 6 --- Architecture interne de l'étage ID.]\hfill\\
+  \item[Figure 6  --  Architecture interne de l'étage ID.]\hfill\\
         Décodeur, banc de registres, toujours-blocs synchrones de
         capture, contrôle avec politique de bulle, multiplexeur de
         renvoi ID-WB.
 
-  \item[Figure 7 --- Vue interne de
+  \item[Figure 7  --  Vue interne de
         \texttt{mpt\_branchgen}.]\hfill\\
         Multiplexeur \texttt{PC\_RELATIVE}/\texttt{REG\_OFFSET},
         additionneur 32~bits, renvoi local pour \texttt{JALR}.
 
-  \item[Figure 8 --- Vue interne de l'étage MEM.]\hfill\\
+  \item[Figure 8  --  Vue interne de l'étage MEM.]\hfill\\
         Décomposition adresse/donnée, génération de
         \texttt{DMEM\_wr\_byte\_en\_o}, unité d'extraction et
         d'extension, multiplexeur \texttt{ForwardM}.
 
-  \item[Figure 9 --- Chronogramme d'aléa
+  \item[Figure 9  --  Chronogramme d'aléa
         charge-utilisation.]\hfill\\
         Trois cycles consécutifs montrant le \texttt{LW}, la bulle
         insérée et le renvoi MEM/WB.
 
-  \item[Figure 10 --- Vue synthétique de la stratégie
+  \item[Figure 10  --  Vue synthétique de la stratégie
         d'aléas.]\hfill\\
         Sources de \texttt{forwardA}, \texttt{forwardB} et
         \texttt{forwardM}, chemin de \texttt{stall\_o}, fenêtre de
         \textit{flush} sur deux cycles.
 
-  \item[Figure 11 --- Sortie du testbench en mode
+  \item[Figure 11  --  Sortie du testbench en mode
         régression.]\hfill\\
         Capture d'écran des 42 verdicts \texttt{[PASS]} et du
         récapitulatif final.
 
-  \item[Figure 12 --- Forme d'onde GTKWave d'un test
+  \item[Figure 12  --  Forme d'onde GTKWave d'un test
         typique.]\hfill\\
         Montée de \texttt{x3}, \texttt{x17} et \texttt{x10} aux
         valeurs de signature de succès.
