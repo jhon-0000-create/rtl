@@ -3,19 +3,19 @@
 %==============================================================================
 \documentclass[11pt,a4paper,oneside]{report}
 
-%  -- - Geometrie / espacement  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- -
+% --------------------------------------------------------------------------
 \usepackage[a4paper,left=2.8cm,right=2.8cm,top=2.6cm,bottom=2.8cm]{geometry}
 \usepackage{setspace}
 \onehalfspacing
 
-%  -- - Encodage / polices  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- --
+% --------------------------------------------------------------------------
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage[french]{babel}
 \usepackage{microtype}
 
-%  -- - Maths / graphiques / tableaux  --  --  --  --  --  --  --  --  --  --  --  --  --  -- 
+% --------------------------------------------------------------------------
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -25,13 +25,13 @@
 \usepackage{float}
 \usepackage{siunitx}
 
-%  -- - Mise en forme des chapitres / sections  --  --  --  --  --  --  --  --  --  --  -- 
+% --------------------------------------------------------------------------
 \usepackage{titlesec}
 \titleformat{\chapter}[display]
   {\normalfont\Large\bfseries}{Chapitre \thechapter}{0.6em}{\Huge}
 \titlespacing*{\chapter}{0pt}{-30pt}{20pt}
 
-%  -- - Listings (Verilog) avec coloration syntaxique avancée  --  --  --  --  --  -- 
+% --------------------------------------------------------------------------
 \usepackage{listings}
 \usepackage{xcolor}
 
@@ -75,7 +75,7 @@
   aboveskip=1em, belowskip=1em
 }
 
-%  -- - Hyperliens / references  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  -- 
+% --------------------------------------------------------------------------
 \usepackage{hyperref}
 \hypersetup{
   colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue!50!black,
@@ -88,7 +88,7 @@
 %==============================================================================
 \begin{document}
 
-%  -- - Pages liminaires (numerotation romaine)  --  --  --  --  --  --  --  --  --  -- --
+% --------------------------------------------------------------------------
 \pagenumbering{roman}
 
 \begin{titlepage}
@@ -130,7 +130,7 @@ les résultats de la vérification.
 
 \tableofcontents
 
-%  -- - Corps du rapport (numerotation arabe)  --  --  --  --  --  --  --  --  --  --  -- -
+% --------------------------------------------------------------------------
 \clearpage
 \pagenumbering{arabic}
 
@@ -230,14 +230,14 @@ Les contributions principales de ce travail sont :
 \end{enumerate}
 
 \section{Organisation du rapport}
-Le \cref{ch:arch} introduit l'architecture de plus haut niveau et
+Le Chapitre~\ref{ch:arch} introduit l'architecture de plus haut niveau et
 la hiérarchie des modules de la présente implémentation. Le
-\cref{ch:pipeline} détaille chacun des cinq étages du pipeline.
-Le \cref{ch:hazards} décrit la logique de gestion des aléas. Le
-\cref{ch:impl} discute des conventions d'implémentation Verilog,
-et le \cref{ch:verif} expose la méthodologie et les résultats de
-la vérification. Le \cref{ch:discussion} aborde les limitations
-et les optimisations envisageables, et le \cref{ch:conclusion}
+Chapitre~\ref{ch:pipeline} détaille chacun des cinq étages du pipeline.
+Le Chapitre~\ref{ch:hazards} décrit la logique de gestion des aléas. Le
+Chapitre~\ref{ch:impl} discute des conventions d'implémentation Verilog,
+et le Chapitre~\ref{ch:verif} expose la méthodologie et les résultats de
+la vérification. Le Chapitre~\ref{ch:discussion} aborde les limitations
+et les optimisations envisageables, et le Chapitre~\ref{ch:conclusion}
 conclut le rapport.
 
 
@@ -329,7 +329,7 @@ l'ALU (\texttt{ID\_alu\_source\_sel}), le code opération de l'ALU
 (\texttt{ID\_branch\_op}), l'opération mémoire
 (\texttt{ID\_mem\_op}) ainsi que le sélecteur de source de
 l'écriture en retour (\texttt{ID\_memtoreg}). Un bloc dédié de
-détection des aléas, décrit au \cref{ch:hazards}, active les
+détection des aléas, décrit au Chapitre~\ref{ch:hazards}, active les
 signaux \texttt{stall\_IF\_ID}, \texttt{flush\_IF\_ID},
 \texttt{flush\_EX} ainsi que les sélecteurs de renvoi
 \texttt{forwardA}, \texttt{forwardB} et \texttt{forwardM}.
@@ -698,7 +698,7 @@ L'unité arithmétique et logique est un bloc purement combinatoire
 piloté par un code de 4 bits \texttt{alu\_ctrl\_i}. La table des
 opérations supportées est définie dans
 \texttt{mpt\_definitions.vh} et est résumée dans le
-\cref{tab:alu-ops}. Onze opérations couvrent l'ensemble du
+Tableau~\ref{tab:alu-ops}. Onze opérations couvrent l'ensemble du
 sous-jeu RV32I.
 
 \begin{table}[h]
@@ -850,7 +850,7 @@ bits de poids faible à zéro et garantit que la DMEM voit toujours
 des accès alignés sur 32 bits. Le décalage interne au mot est géré
 par \texttt{DMEM\_wr\_byte\_en\_o}, un masque sur 4~bits où
 chaque bit autorise l'écriture sur l'un des octets du mot. Le
-\cref{tab:byteen} récapitule les masques générés selon le couple
+Tableau~\ref{tab:byteen} récapitule les masques générés selon le couple
 $(\texttt{EX\_mem\_op\_i}, \texttt{EX\_alu\_result\_i[1:0]})$.
 
 \begin{table}[h]
@@ -902,7 +902,7 @@ effectivement écrite en mémoire par un \texttt{SW}/\texttt{SH}/\texttt{SB} :
 soit \texttt{EX\_rs2\_data\_i} (cas standard), soit
 \texttt{MEM\_alu\_result\_o} si l'instruction qui produit
 \texttt{rs2} se trouve juste devant à la frontière MEM/WB.
-Cette logique sera examinée plus en détail au \cref{ch:hazards}.
+Cette logique sera examinée plus en détail au Chapitre~\ref{ch:hazards}.
 
 \begin{figure}[H]
   \centering
@@ -1058,10 +1058,10 @@ registre qui correspond à \texttt{ID\_rd\_addr\_i}, alors
 asserté, trois actions se produisent simultanément :
 \begin{itemize}
   \item l'étage IF rejoue \texttt{IMEM\_addr\_o - 4} (cf.\
-        \cref{sec:if}), ce qui revient à figer le PC ;
+        Section~\ref{sec:if}), ce qui revient à figer le PC ;
   \item l'étage ID gèle son registre pipeline mais force les
         autorisations destructives à zéro -- c'est l'injection de
-        bulle décrite à la \cref{sec:id} ;
+        bulle décrite à la Section~\ref{sec:id} ;
   \item l'étage EX traite la bulle exactement comme une
         instruction inoffensive ; le \texttt{LW} bloqué un cycle
         plus tôt avance vers MEM, et au cycle suivant le
@@ -1111,7 +1111,7 @@ qui était dans EX en même temps que le branchement doit elle aussi
 \texttt{mpt\_control} produit pour cela
 \texttt{EX\_flush\_o = EX\_branch\_en\_i}. Ce signal alimente le
 toujours-bloc synchrone du registre EX/MEM
-(\cref{sec:ex}) qui efface alors les autorisations destructives.
+(Section~\ref{sec:ex}) qui efface alors les autorisations destructives.
 
 \subsection{Coût total des aléas de contrôle}
 La pénalité observée est de deux cycles pour les branchements
@@ -1125,9 +1125,9 @@ Outre les chemins centralisés dans \texttt{mpt\_control}, le
 c\oe{}ur compte deux renvois locaux :
 \begin{itemize}
   \item le renvoi WR-RD interne à \texttt{mpt\_regfile}
-        (\cref{sec:regfile}) ;
+        (Section~\ref{sec:regfile}) ;
   \item le renvoi local au générateur de branchement,
-        \texttt{mpt\_branchgen} (\cref{sec:branchgen}).
+        \texttt{mpt\_branchgen} (Section~\ref{sec:branchgen}).
 \end{itemize}
 Conjugués au mécanisme central, ces renvois locaux suffisent à
 maintenir \texttt{mpt\_control} dans une logique purement
@@ -1307,7 +1307,7 @@ La suite couvre :
 \end{itemize}
 
 \subsection{Tableau récapitulatif}
-Le \cref{tab:tests} présente la liste complète des tests avec leur
+Le Tableau~\ref{tab:tests} présente la liste complète des tests avec leur
 identifiant numérique tel qu'utilisé dans \texttt{testbench.v}.
 
 \begin{table}[H]
