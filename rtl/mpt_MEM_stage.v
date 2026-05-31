@@ -206,7 +206,9 @@ module mpt_MEM_stage
         // silently returned wrong data instead of trapping. We now flag any
         // halfword load whose offset is odd (LSB == 1) and any word load
         // whose offset is not 2'b00 as misaligned, matching RV32I semantics.
-        if (EX_mem_rd_en_i) begin
+        // (EX_memtoreg_i is high for all loads, so we use it to gate the check
+        // without needing a separate EX_mem_rd_en_i port.)
+        if (EX_memtoreg_i) begin
             case (EX_mem_op_i)
                 `MEM_LH, `MEM_LH_U: if (EX_alu_result_i[0]    != 1'b0) misaligned_load = 1;
                 `MEM_LW:            if (EX_alu_result_i[1:0]  != 2'b00) misaligned_load = 1;
