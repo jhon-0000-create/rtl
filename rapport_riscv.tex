@@ -1,0 +1,1712 @@
+%==============================================================================
+%  Processeur RISC-V (RV32I) pipeliné -- Rapport technique
+%  Une seule colonne, A4, 11 pt, ~30 a 40 pages.
+%==============================================================================
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ---- Geometrie / espacement -------------------------------------------------
+\usepackage[a4paper,left=2.8cm,right=2.8cm,top=2.6cm,bottom=2.8cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---- Encodage / polices -----------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[french]{babel}
+\usepackage{microtype}
+
+% ---- Maths / graphiques / tableaux ------------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{siunitx}
+
+% ---- Mise en forme des chapitres / sections ---------------------------------
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\Large\bfseries}{Chapitre \thechapter}{0.6em}{\Huge}
+\titlespacing*{\chapter}{0pt}{-30pt}{20pt}
+
+% ---- Listings (Verilog) -----------------------------------------------------
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstdefinelanguage{Verilog}{
+  morekeywords={module,endmodule,input,output,inout,wire,reg,assign,always,
+                posedge,negedge,begin,end,if,else,case,casez,casex,endcase,
+                parameter,localparam,default,for,generate,endgenerate,
+                function,endfunction,task,endtask,initial},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]"
+}
+\lstset{
+  language=Verilog,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries\color{blue!60!black},
+  commentstyle=\itshape\color{green!40!black},
+  stringstyle=\color{red!60!black},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=8pt,
+  frame=single, framerule=0.3pt,
+  breaklines=true, columns=fullflexible,
+  captionpos=b, xleftmargin=1.5em
+}
+
+% ---- Hyperliens / references ------------------------------------------------
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue!50!black,
+  pdftitle={Processeur RISC-V RV32I pipeline -- Rapport technique},
+  pdfauthor={Nom de l'auteur}
+}
+\usepackage{cleveref}
+
+
+%==============================================================================
+\begin{document}
+
+% ---- Pages liminaires (numerotation romaine) --------------------------------
+\pagenumbering{roman}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+  {\Large\bfseries Conception et vérification d'un\\[0.3em]
+   processeur RISC-V RV32I pipeliné en Verilog\par}
+  \vspace{2cm}
+  {\large Rapport technique\par}
+  \vspace{2cm}
+  {\large Nom de l'auteur\par}
+  {\normalsize Département de génie électrique et informatique\par}
+  {\normalsize Université / Institution\par}
+  \vspace{2cm}
+  {\normalsize \today\par}
+  \vfill
+\end{titlepage}
+
+
+\chapter*{Résumé}
+\addcontentsline{toc}{chapter}{Résumé}
+Ce rapport présente la conception, l'implémentation et la
+vérification fonctionnelle d'un c\oe{}ur de processeur RISC-V pipeliné
+à cinq étages mettant en \oe{}uvre le jeu d'instructions de base
+RV32I. La microarchitecture suit l'organisation canonique
+Récupération d'instruction (IF), Décodage (ID), Exécution (EX),
+Accès mémoire (MEM) et Écriture en retour (WB), augmentée d'une
+unité de renvoi des opérandes, d'un détecteur de blocage pour les
+dépendances charge-utilisation et d'un mécanisme de vidage du
+pipeline destiné à atténuer les aléas de données et de contrôle.
+La conception est décrite en Verilog-2001 synthétisable, organisée
+en modules par étage clairement délimités sous un module
+enveloppe unique de plus haut niveau. La vérification
+fonctionnelle est réalisée à l'aide de la suite officielle
+\texttt{riscv-tests} \texttt{rv32ui-p-*}, chaque test étant compilé
+en image hexadécimale puis rejoué sur un banc de test
+auto-vérifiant. Le rapport documente l'architecture, la stratégie
+de gestion des aléas, les interfaces Verilog de chaque module et
+les résultats de la vérification.
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+
+% ---- Corps du rapport (numerotation arabe) ----------------------------------
+\clearpage
+\pagenumbering{arabic}
+
+%==============================================================================
+\chapter{Introduction}
+\label{ch:intro}
+
+\section{Motivation et contexte}
+Le jeu d'instructions RISC-V (Reduced Instruction Set Computer~V)
+s'est imposé au cours de la dernière décennie comme un standard
+ouvert et libre pour la conception de processeurs, offrant une
+alternative claire, modulaire et extensible aux jeux d'instructions
+propriétaires qui dominent depuis longtemps les marchés de
+l'embarqué et du calcul généraliste. Son sous-ensemble entier de
+base, RV32I, est volontairement réduit---moins de cinquante
+instructions---tout en restant suffisant pour supporter un modèle
+de programmation généraliste complet ainsi que les chaînes de
+compilation modernes, les noyaux de système d'exploitation et les
+suites de tests de référence. La conjonction de l'ouverture, de la
+simplicité et de la maturité de la chaîne d'outils a fait de RV32I
+un véhicule particulièrement adapté à l'étude de la conception
+classique de processeurs pipelinés, sans les contraintes
+d'encodages historiques ni les restrictions de licence.
+
+
+Dans un cadre académique, la construction d'un c\oe{}ur RV32I
+fonctionnel rassemble des sujets habituellement enseignés
+isolément : encodage et décodage du jeu d'instructions, conception
+de machines à états finis, description au niveau transfert de
+registres (RTL), analyse des aléas et vérification fonctionnelle.
+Le présent travail aborde l'ensemble de ces objectifs au sein
+d'un même artefact intégré : une description Verilog synthétisable
+d'un c\oe{}ur RV32I pipeliné à cinq étages, accompagnée d'un banc de
+test auto-vérifiant et d'une suite de non-régression issue du
+projet officiel \texttt{riscv-tests}.
+
+\section{Objectifs du projet}
+Le travail documenté dans ce rapport poursuit trois objectifs
+principaux :
+\begin{itemize}
+  \item concevoir un c\oe{}ur synthétisable, en ordre, à émission
+        unique, pipeliné à cinq étages, exécutant correctement
+        l'intégralité du jeu d'instructions utilisateur RV32I ;
+  \item implémenter un sous-système complet de gestion des aléas
+        comprenant le renvoi (\textit{forwarding}) des opérandes,
+        l'insertion de blocages pour les dépendances de type
+        charge-utilisation, ainsi que le vidage du pipeline lors
+        des branchements et des sauts pris ;
+  \item vérifier la conception résultante à l'aide de la suite de
+        non-régression officielle \texttt{riscv-tests}
+        \texttt{rv32ui-p-*}, fournissant ainsi une preuve
+        objective et reproductible de la conformité au jeu
+        d'instructions.
+\end{itemize}
+
+Un objectif secondaire, d'ordre pédagogique, est la clarté de la
+lecture : le code source est délibérément découpé en un module
+Verilog par étage du pipeline, de sorte que la conception puisse
+être abordée de haut en bas, chaque étage pouvant être compris
+isolément avant l'examen de la logique de gestion des aléas qui
+relie les étages entre eux.
+
+\section{Périmètre et limitations}
+L'implémentation actuelle ne cible que le sous-ensemble utilisateur
+de RV32I. Les registres de contrôle et de statut (CSR),
+l'architecture privilégiée, la gestion des trappes et des
+interruptions, ainsi que les extensions M (multiplication et
+division), A (atomique), F/D (virgule flottante) et C (compressée)
+sont explicitement hors du champ de l'étude. Les instructions
+exceptionnelles (\texttt{ECALL}, \texttt{EBREAK}) et les
+écritures mémoire mal alignées sont détectées et signalées par un
+signal \texttt{exception\_o} de plus haut niveau, mais ne sont pas
+traitées par un gestionnaire de trappe interne au c\oe{}ur ; leur
+prise en charge incombe au système sur puce (SoC) environnant. De
+même, le sous-système mémoire est modélisé sous forme de ports
+idéaux IMEM et DMEM de type Harvard ; les caches, les protocoles
+de bus (par exemple AXI) et les contrôleurs mémoire ne sont pas
+abordés.
+
+
+\section{Contributions}
+Les contributions principales de ce travail sont :
+\begin{enumerate}
+  \item une implémentation Verilog modulaire, claire et
+        entièrement synthétisable d'un pipeline RV32I à cinq
+        étages ;
+  \item un sous-système documenté de gestion des aléas combinant
+        des sélecteurs de renvoi sur deux bits (\texttt{forwardA},
+        \texttt{forwardB}), un sélecteur de renvoi MEM-vers-MEM
+        sur un bit pour la donnée à écrire (\texttt{forwardM}),
+        un blocage charge-utilisation (\texttt{stall\_IF\_ID})
+        ainsi que des vidages du pipeline (\texttt{flush\_IF\_ID},
+        \texttt{flush\_EX}) ;
+  \item un flot de vérification reproductible bâti autour de la
+        suite officielle \texttt{riscv-tests}
+        \texttt{rv32ui-p-*}, accompagné d'un décompte
+        succès/échec par test.
+\end{enumerate}
+
+\section{Organisation du rapport}
+Le \Cref{ch:arch} introduit l'architecture de plus haut niveau et
+la hiérarchie des modules de la présente implémentation. Le
+\Cref{ch:pipeline} détaille chacun des cinq étages du pipeline.
+Le \Cref{ch:hazards} décrit la logique de gestion des aléas. Le
+\Cref{ch:impl} discute des conventions d'implémentation Verilog,
+et le \Cref{ch:verif} expose la méthodologie et les résultats de
+la vérification. Le \Cref{ch:discussion} aborde les limitations
+et les optimisations envisageables, et le \Cref{ch:conclusion}
+conclut le rapport.
+
+
+%==============================================================================
+\chapter{Aperçu de l'architecture}
+\label{ch:arch}
+
+\section{Organisation de plus haut niveau}
+Le processeur est encapsulé dans un unique module de plus haut
+niveau, \texttt{mpt\_top}, qui expose une horloge, une
+réinitialisation active à l'état bas, une entrée d'adresse de
+démarrage ainsi que deux interfaces mémoire de type Harvard : un
+port en lecture seule vers la mémoire d'instructions (IMEM) et un
+port en lecture/écriture, à granularité d'octet, vers la mémoire
+de données (DMEM). Une sortie unique \texttt{exception\_o} signale
+l'occurrence d'un \texttt{ECALL}, d'un \texttt{EBREAK} ou d'une
+écriture mémoire mal alignée. L'interface du plus haut niveau est
+intentionnellement minimale, de manière à ce que le c\oe{}ur puisse
+être intégré dans un système sur puce (SoC) plus large doté d'un
+sous-système mémoire arbitraire, qu'il s'agisse de mémoire bloc
+sur puce, d'un contrôleur DRAM externe placé derrière un cache
+ou d'un pont vers une matrice de périphériques.
+
+
+\section{Hiérarchie des modules}
+En interne, \texttt{mpt\_top} instancie un module par étage du
+pipeline---\texttt{mpt\_IF\_stage}, \texttt{mpt\_ID\_stage},
+\texttt{mpt\_EX\_stage}, \texttt{mpt\_MEM\_stage} et
+\texttt{mpt\_WB\_stage}---ainsi qu'un petit nombre de blocs
+combinatoires partagés. \texttt{mpt\_decoder} et
+\texttt{mpt\_control} produisent conjointement le mot de contrôle
+propre à chaque instruction à partir du mot de 32 bits.
+\texttt{mpt\_regfile} implémente le banc de registres
+architectural de 32~$\times$~32 bits, à lecture asynchrone et
+écriture synchrone, le registre \texttt{x0} étant câblé à zéro.
+\texttt{mpt\_alu} réalise l'ensemble des opérations
+arithmétiques, logiques et de décalage. \texttt{mpt\_branchgen}
+résout la direction des branchements et calcule les adresses
+cibles des branchements et des sauts. Les encodages du jeu
+d'instructions, les codes opérations de l'ALU et les largeurs des
+paramètres sont centralisés dans le fichier d'en-tête
+\texttt{mpt\_definitions.vh}, inclus par chaque module afin que
+toute modification d'un opcode ou d'une largeur se propage de
+façon cohérente à l'ensemble de la conception.
+
+
+\section{Aperçu du chemin de données}
+Le chemin de données suit l'organisation classique en cinq
+étages. À l'étage IF, le compteur ordinal (PC) est présenté à
+l'IMEM et le mot retourné est verrouillé dans le registre
+pipeline IF/ID. À l'étage ID, l'instruction est décodée,
+l'immédiat est étendu par signe ou par zéro selon son format
+(I/S/B/U/J), et les deux opérandes source sont lus dans le banc
+de registres. À l'étage EX, l'ALU combine ses opérandes---
+choisis parmi les sorties du banc de registres, l'immédiat et les
+valeurs renvoyées---pour calculer soit un résultat arithmétique,
+soit une adresse mémoire effective ; en parallèle,
+\texttt{mpt\_branchgen} évalue la condition de branchement et
+calcule l'adresse cible. À l'étage MEM, les chargements et les
+écritures sont émis vers la DMEM avec le masque d'octets
+approprié ; les chargements sous-mot (\texttt{LB}, \texttt{LH},
+\texttt{LBU}, \texttt{LHU}) sont étendus par signe ou par zéro
+sur la largeur complète d'un registre. Enfin, à l'étage WB, le
+résultat---sortie de l'ALU, donnée chargée ou adresse de retour
+\texttt{PC}+4---est écrit en retour dans le banc de registres.
+
+
+\section{Aperçu du chemin de contrôle}
+Les signaux de contrôle sont produits une seule fois par
+instruction à l'étage ID, puis circulent aux côtés des opérandes
+à travers les registres pipeline. Le décodeur
+(\texttt{mpt\_decoder}) classifie l'instruction d'après son code
+opération et ses champs \texttt{funct3}/\texttt{funct7}, et émet
+les autorisations de lecture et d'écriture du banc de registres,
+le sélecteur de format d'immédiat, le sélecteur de source de
+l'ALU (\texttt{ID\_alu\_source\_sel}), le code opération de l'ALU
+(\texttt{ID\_alu\_ctrl}), le type de branchement
+(\texttt{ID\_branch\_op}), l'opération mémoire
+(\texttt{ID\_mem\_op}) ainsi que le sélecteur de source de
+l'écriture en retour (\texttt{ID\_memtoreg}). Un bloc dédié de
+détection des aléas, décrit au \Cref{ch:hazards}, active les
+signaux \texttt{stall\_IF\_ID}, \texttt{flush\_IF\_ID},
+\texttt{flush\_EX} ainsi que les sélecteurs de renvoi
+\texttt{forwardA}, \texttt{forwardB} et \texttt{forwardM}.
+
+
+\section{Interfaces mémoire}
+Les deux ports mémoire sont adressés par mot et larges de 32
+bits. Le port IMEM fournit une lecture combinatoire du mot
+d'instruction à l'adresse \texttt{IMEM\_addr\_o} ; l'adresse de
+démarrage est fournie de l'extérieur par \texttt{boot\_addr\_i}
+et chargée dans le PC à la réinitialisation. Le port DMEM gère
+les écritures à granularité d'octet, de demi-mot et de mot grâce
+au signal de validation sur quatre bits
+\texttt{DMEM\_wr\_byte\_en\_o} ; les lectures retournent toujours
+un mot de 32 bits dont l'étage MEM extrait et étend la portion
+sous-mot demandée. Les écritures mémoire mal alignées sont
+détectées à l'étage MEM et signalées sur \texttt{exception\_o}.
+
+\section{Paramétrage}
+Le c\oe{}ur est paramétré au moyen de \texttt{mpt\_definitions.vh}
+et de la liste de paramètres du module de plus haut niveau,
+exposant la largeur des données de registre
+(\texttt{REG\_DATA\_WIDTH}, par défaut 32), la largeur d'adresse
+du banc de registres (\texttt{REGFILE\_ADDR\_WIDTH}, par défaut
+5), la largeur d'adresse de l'IMEM (\texttt{IMEM\_ADDR\_WIDTH},
+par défaut 32) ainsi que la largeur du code opération de l'ALU
+(\texttt{ALU\_OP\_WIDTH}, par défaut 4). Bien que le présent
+travail vise RV32I, ce paramétrage laisse ouverte la possibilité
+d'une migration ultérieure vers RV64I sans refonte intrusive du
+code.
+
+
+%==============================================================================
+\chapter{Conception des étages du pipeline}
+\label{ch:pipeline}
+
+Ce chapitre détaille successivement les cinq étages du pipeline,
+puis les trois blocs combinatoires partagés par plusieurs étages :
+l'unité arithmétique et logique (\texttt{mpt\_alu}), le banc de
+registres (\texttt{mpt\_regfile}) et le générateur d'adresses de
+branchement (\texttt{mpt\_branchgen}). Chaque étage est présenté
+suivant une trame uniforme : rôle, interfaces, registres pipeline
+en sortie, comportement combinatoire interne et points d'attention
+microarchitecturaux propres à l'implémentation.
+
+\section{Étage IF -- Récupération d'instruction}
+\label{sec:if}
+
+\subsection{Rôle et interfaces}
+Le module \texttt{mpt\_IF\_stage} héberge le compteur ordinal
+\texttt{IMEM\_addr\_o}, qui sert simultanément d'adresse présentée
+à la mémoire d'instructions et de registre architectural du PC. À
+chaque front montant de \texttt{clk\_i}, le module met à jour
+\texttt{IMEM\_addr\_o}, puis recopie son ancienne valeur dans
+\texttt{IF\_pc\_o}. Cette duplication apparente---deux registres
+représentant le PC---est en réalité essentielle au pipeline : elle
+permet de propager vers ID l'adresse de l'instruction réellement
+fetchée pendant que IF est déjà en train de calculer l'adresse de
+l'instruction suivante.
+
+
+\subsection{Multiplexeur d'entrée du PC}
+Le c\oe{}ur de l'étage est un multiplexeur 4-vers-1
+combinatoire qui sélectionne la valeur de \texttt{pc\_next} :
+\begin{enumerate}
+  \item priorité~1 : \texttt{ID\_jump\_en\_i} actif --- saut
+        inconditionnel (\texttt{JAL} ou \texttt{JALR}) résolu en
+        ID, le PC suivant est l'adresse cible
+        \texttt{BG\_pc\_dest\_i} fournie par le générateur de
+        branchement ;
+  \item priorité~2 : \texttt{EX\_branch\_en\_i} actif ---
+        branchement conditionnel pris confirmé en EX, le PC
+        suivant est \texttt{EX\_pc\_dest\_i} ;
+  \item priorité~3 : \texttt{stall\_i} actif --- aléa
+        charge-utilisation, on doit recharger l'instruction
+        courante, donc \texttt{pc\_next = IMEM\_addr\_o - 4} ;
+  \item cas par défaut : avancement séquentiel
+        \texttt{pc\_next = IMEM\_addr\_o + 4}.
+\end{enumerate}
+La priorité~3 mérite une explication. Comme \texttt{IMEM\_addr\_o}
+a déjà été incrémenté lors du cycle où l'aléa est détecté, le
+processeur a en fait dépassé l'instruction qui doit être rejouée.
+La soustraction de quatre rétablit cette adresse au cycle suivant,
+ce qui équivaut fonctionnellement à figer le PC le temps qu'une
+bulle traverse l'étage ID.
+
+
+\subsection{Injection de NOP par le signal de \textit{flush}}
+La sortie \texttt{IF\_instruction\_o} n'est pas un registre
+synchrone supplémentaire mais un multiplexeur 2-vers-1
+combinatoire piloté par \texttt{flush\_i} :
+\[
+\texttt{IF\_instruction\_o} =
+\begin{cases}
+\texttt{32'h0000\_0000} & \text{si } \texttt{flush\_i} = 1 \\
+\texttt{IMEM\_data\_i} & \text{sinon.}
+\end{cases}
+\]
+La constante \texttt{32'h00000000} se décode en
+\texttt{ADDI x0, x0, 0}, soit l'encodage canonique du NOP RISC-V.
+Cette technique, courante mais subtile, permet de transformer
+n'importe quelle instruction fetchée en un NOP architectural sans
+ajouter de chemin de contrôle dédié à l'étage ID.
+
+\subsection{Comportement à la réinitialisation}
+Au front montant suivant l'assertion de \texttt{resetn\_i} bas,
+\texttt{IMEM\_addr\_o} est forcé à \texttt{boot\_addr\_i} et
+\texttt{IF\_pc\_o} est mis à zéro. La quasi-totalité des suites
+\texttt{rv32ui-p} sont liées à l'adresse de démarrage
+\texttt{0x80000000} mais sont relogées à \texttt{0x00000000} dans
+notre flot, de sorte que le testbench fournit
+\texttt{boot\_addr\_i = 32'b0}.
+
+
+\section{Étage ID -- Décodage et lecture des registres}
+\label{sec:id}
+
+\subsection{Architecture en enveloppe}
+Le module \texttt{mpt\_ID\_stage} est une enveloppe structurelle
+combinant deux sous-blocs entièrement combinatoires
+(\texttt{mpt\_decoder} et le port de lecture de
+\texttt{mpt\_regfile}) avec les flip-flops du registre pipeline
+ID/EX. Cette organisation présente un avantage de lisibilité :
+toute la logique de décodage, sans état, vit dans un fichier
+indépendant ; tout l'état architectural transite par les
+toujours-blocs synchrones de l'enveloppe.
+
+\subsection{Sous-bloc 1 -- Décodeur}
+\texttt{mpt\_decoder} reçoit le mot de 32 bits
+\texttt{IF\_instruction\_i} ainsi que \texttt{IF\_pc\_i}, et
+produit en parallèle :
+\begin{itemize}
+  \item les trois adresses de registre \texttt{rd\_addr\_o},
+        \texttt{rs1\_addr\_o}, \texttt{rs2\_addr\_o} ;
+  \item les cinq versions étendues d'immédiat
+        \texttt{IMM\_I}, \texttt{IMM\_S}, \texttt{IMM\_B},
+        \texttt{IMM\_U} et \texttt{IMM\_J} ;
+  \item le sélecteur d'origine d'opérande
+        \texttt{alu\_source\_sel\_o} (deux bits indiquant
+        respectivement si l'opérande~1 et l'opérande~2 doivent
+        être un immédiat) ;
+  \item le code opération de l'ALU \texttt{alu\_op\_o} (4 bits) ;
+  \item les signaux de branchement \texttt{branch\_op\_o} et
+        \texttt{branch\_flag\_o} ;
+  \item les autorisations mémoire \texttt{mem\_wr\_en\_o},
+        \texttt{mem\_rd\_en\_o}, le code d'opération mémoire
+        \texttt{mem\_op\_o} et le sélecteur d'écriture
+        \texttt{memtoreg\_o} ;
+  \item l'autorisation d'écriture \texttt{rd\_wr\_en\_o} et le
+        drapeau \texttt{exception\_o}.
+\end{itemize}
+
+
+\subsubsection*{Construction des immédiats}
+La spécification RV32I retient cinq formats d'immédiat (I, S, B, U,
+J) qui ne diffèrent que par la position des bits dans le mot
+d'instruction. Le décodeur tire parti du fait que le bit de signe
+\texttt{instruction\_i[31]} est \emph{toujours} le bit le plus
+significatif de l'immédiat, quel que soit le format. Cette
+particularité, voulue par les architectes de RISC-V, permet
+d'implémenter l'extension de signe par une réplique unique du même
+fil sur 12 ou 20 bits, indépendamment de l'opcode :
+\begin{lstlisting}[caption={Construction des cinq immédiats dans
+\texttt{mpt\_decoder}.},captionpos=b,label={lst:imm}]
+IMM_I = { {20{instruction_i[31]}}, instruction_i[31:20] };
+IMM_S = { {20{instruction_i[31]}}, instruction_i[31:25],
+          instruction_i[11:7] };
+IMM_B = { {20{instruction_i[31]}}, instruction_i[7],
+          instruction_i[30:25], instruction_i[11:8], 1'b0 };
+IMM_U = { instruction_i[31:12], 12'b0 };
+IMM_J = { {12{instruction_i[31]}}, instruction_i[19:12],
+          instruction_i[20], instruction_i[30:25],
+          instruction_i[24:21], 1'b0 };
+\end{lstlisting}
+La concaténation finale d'un \texttt{1'b0} dans \texttt{IMM\_B} et
+\texttt{IMM\_J} reflète l'alignement obligatoire des cibles de
+branchement et de saut sur deux octets, qui n'est pas codé dans
+l'instruction.
+
+
+\subsubsection*{Décodage des opcodes}
+Le décodeur examine \texttt{OPCODE = instruction\_i[6:0]} dans une
+unique structure \texttt{case}. Pour chacune des huit familles
+d'opcode (\texttt{OP}, \texttt{OP\_IMM}, \texttt{BRANCH},
+\texttt{LUI}, \texttt{AUIPC}, \texttt{JAL}, \texttt{JALR},
+\texttt{LOAD}, \texttt{STORE}), il configure simultanément le code
+ALU, l'origine des opérandes, l'immédiat à propager et les
+autorisations de mémoire et d'écriture en retour. Trois détails
+méritent d'être soulignés :
+\begin{enumerate}
+  \item \texttt{ADD} et \texttt{SUB} (ainsi que \texttt{SRL} et
+        \texttt{SRA}) partagent le même \texttt{FUNCT3} et ne se
+        distinguent que par le bit \texttt{FUNCT7 = instruction\_i[30]}
+        (les autres bits du champ \texttt{funct7} sont
+        ignorés) ;
+  \item l'autorisation d'écriture \texttt{rd\_wr\_en\_o} est
+        explicitement masquée à zéro lorsque
+        \texttt{instruction\_i[11:7] == 0}, c'est-à-dire lorsque
+        l'instruction tente d'écrire dans \texttt{x0}, ce qui
+        soulage l'unité de gestion des aléas (un faux positif
+        \texttt{x0} ne pourra jamais déclencher un renvoi) ;
+  \item \texttt{JAL} et \texttt{JALR} forcent
+        \texttt{alu\_source\_sel\_o = 2'b10}, ce qui aiguille
+        l'opérande~1 vers \texttt{pc\_i}. La constante~4 est, elle,
+        injectée plus tard dans l'étage EX ; ainsi le calcul de
+        l'adresse de retour \texttt{PC + 4} est partagé entre le
+        décodeur et l'étage EX, sans additionneur dédié.
+\end{enumerate}
+Enfin, \texttt{exception\_o} est levé exactement lorsque le mot
+d'instruction est l'un des deux encodages \texttt{ECALL}
+(\texttt{32'h00000073}) ou \texttt{EBREAK}
+(\texttt{32'h00100073}).
+
+
+\subsection{Sous-bloc 2 -- Banc de registres}
+Le module \texttt{mpt\_regfile} expose deux ports de lecture
+combinatoires (\texttt{rs1\_data\_o}, \texttt{rs2\_data\_o}) et un
+port d'écriture synchrone. Sa particularité est de réaliser, sur
+chaque port de lecture, un renvoi interne en lecture-vers-écriture
+combinatoire : si l'adresse demandée à un port de lecture est
+identique à l'adresse en cours d'écriture (\texttt{rd\_addr\_i}) et
+que \texttt{rd\_wr\_en\_i} est actif, le multiplexeur substitue
+combinatoirement \texttt{rd\_wr\_data\_i} à la sortie du tableau
+mémoire. Cette astuce résout l'aléa structurel
+\og{}écriture-lors-de-lecture\fg{} sans coût additionnel en logique
+séquentielle. L'éligibilité \texttt{rd\_addr\_i != 0} garantit
+qu'aucune écriture vers \texttt{x0} ne traverse jamais ce chemin
+de renvoi.
+
+\subsection{Pipeline ID/EX et injection de bulles}
+Trois toujours-blocs synchrones distincts forment le registre
+pipeline ID/EX :
+\begin{itemize}
+  \item \emph{Bloc A} : capture les adresses de registre, les
+        immédiats et le drapeau d'exception. Ces signaux ne sont
+        jamais masqués par \texttt{stall\_i} : ils ne déclenchent
+        aucune action et peuvent être traités comme du
+        \og{}pass-through inoffensif\fg{}.
+  \item \emph{Bloc B} : capture les signaux de contrôle. Ce bloc
+        implémente la \emph{politique d'insertion de bulle} :
+        \begin{itemize}
+          \item sur \texttt{flush\_i} ou
+                \texttt{resetn\_i = 0}, tous les signaux sont
+                effacés ;
+          \item sur \texttt{stall\_i = 1}, les signaux passifs
+                (PC, code ALU, immédiats) sont gelés, mais les
+                trois autorisations destructives
+                \texttt{ID\_mem\_wr\_en\_o},
+                \texttt{ID\_mem\_rd\_en\_o},
+                \texttt{ID\_rd\_wr\_en\_o} sont forcées à zéro.
+                C'est cette politique qui transforme l'instruction
+                rejouée en une bulle sans état pendant le cycle de
+                blocage ;
+          \item dans le cas standard, les sorties du décodeur sont
+                propagées sans modification.
+        \end{itemize}
+  \item \emph{Bloc C} : recopie synchroniquement
+        \texttt{rs1\_data} et \texttt{rs2\_data} dans
+        \texttt{rs1\_rd\_data} et \texttt{rs2\_rd\_data}. Cette
+        registration intermédiaire permet d'isoler le banc de
+        registres du chemin combinatoire interne au bloc D
+        ci-dessous.
+\end{itemize}
+
+
+\subsection{Renvoi interne ID-WB}
+Le bloc combinatoire D effectue un renvoi de fin de pipeline
+strictement interne à l'étage ID : si l'instruction qui finalise
+sa phase WB le cycle courant écrit dans le même registre que
+\texttt{rs1} ou \texttt{rs2} de l'instruction en train d'être
+décodée, et que cette écriture porte sur un registre non nul,
+\texttt{ID\_rs1\_data\_o} ou \texttt{ID\_rs2\_data\_o} reçoit
+combinatoirement \texttt{WB\_rd\_wr\_data\_i}. Ce mécanisme évite
+qu'une donnée venant d'être écrite par WB et lue le même cycle ne
+soit obsolète---l'écriture étant synchrone, elle ne sera visible
+au tableau mémoire qu'au cycle suivant.
+
+\section{Étage EX -- Exécution}
+\label{sec:ex}
+
+\subsection{Rôle et organisation}
+\texttt{mpt\_EX\_stage} est responsable de quatre tâches
+indépendantes : sélectionner les opérandes effectifs de l'ALU
+parmi les sources possibles, exécuter l'opération, évaluer les
+conditions de branchement et produire le signal final
+\texttt{EX\_branch\_en\_o} consommé par IF, et enfin propager les
+signaux de contrôle vers la frontière EX/MEM.
+
+
+\subsection{Multiplexeurs d'opérande à 3 voies}
+L'opérande~A de l'ALU est issu d'un multiplexeur 3-vers-1
+combinatoire dont la table de sélection est :
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+\texttt{forwardA\_i} & Source choisie \\
+\midrule
+\texttt{2'b00} & valeur normale d'ID, soit
+                 \texttt{ID\_rs1\_data\_i}, soit
+                 \texttt{ID\_imm1\_i} \\
+\texttt{2'b10} & renvoi depuis EX/MEM
+                 (\texttt{EX\_alu\_result\_o}) \\
+\texttt{2'b01} & renvoi depuis MEM/WB
+                 (\texttt{WB\_rd\_wr\_data\_i}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Une priorité absolue est cependant donnée au cas
+\texttt{ID\_jump\_en\_i = 1} : pour \texttt{JAL} et \texttt{JALR},
+l'opérande~A est court-circuité à \texttt{ID\_imm1\_i} (qui
+contient \texttt{pc\_i}, voir le décodeur), de sorte que
+l'ALU calcule l'adresse de retour. Le multiplexeur de l'opérande~B
+est strictement symétrique mais, dans le cas saut, force
+\texttt{alu\_op2 = 32'd4}. La combinaison
+$\text{Op1} = \texttt{pc\_i}$, $\text{Op2} = 4$, code ALU \texttt{ADD}
+fait calculer à l'ALU $PC + 4$, qui sera ensuite écrit dans
+\texttt{rd}, conformément à la sémantique de
+\texttt{JAL}/\texttt{JALR}.
+
+
+\subsection{Évaluation des branchements conditionnels}
+Le bloc 4 du module est synchrone~: il échantillonne
+\texttt{test\_result} sortant de l'ALU et applique la table de
+décodage suivante au front d'horloge :
+\begin{itemize}
+  \item si \texttt{ID\_branch\_op\_i[1] = 0} : instruction
+        non-branchement, \texttt{EX\_branch\_en\_o} est forcé à
+        zéro ;
+  \item si \texttt{ID\_jump\_en\_i = 1} : saut inconditionnel
+        déjà résolu en ID, \texttt{EX\_branch\_en\_o = 0} pour
+        ne pas dupliquer la correction du PC ;
+  \item sinon, la condition s'écrit
+        $\texttt{EX\_branch\_en\_o} =
+        \texttt{ID\_branch\_flag\_i} \oplus
+        \texttt{test\_result}$, c'est-à-dire que
+        \texttt{branch\_flag = 0} prend la branche si la
+        comparaison est vraie (\texttt{BEQ}, \texttt{BLT},
+        \texttt{BLTU}) et \texttt{branch\_flag = 1} la prend si
+        la comparaison est fausse (\texttt{BNE}, \texttt{BGE},
+        \texttt{BGEU}).
+\end{itemize}
+\texttt{EX\_pc\_dest\_o} est, lui, simplement la version
+échantillonnée de l'adresse précalculée par
+\texttt{mpt\_branchgen}, à laquelle le bloc 1 ajoute une nuance :
+sur un \textit{flush}, l'ancienne valeur est conservée plutôt que
+remise à zéro, afin que le PC ait toujours une cible cohérente le
+temps que la machine d'état IF se réoriente.
+
+
+\section{ALU -- \texttt{mpt\_alu}}
+\label{sec:alu}
+
+\subsection{Encodage des opérations}
+L'unité arithmétique et logique est un bloc purement combinatoire
+piloté par un code de 4 bits \texttt{alu\_ctrl\_i}. La table des
+opérations supportées est définie dans
+\texttt{mpt\_definitions.vh} et est résumée dans le
+\Cref{tab:alu-ops}. Onze opérations couvrent l'ensemble du
+sous-jeu RV32I.
+
+\begin{table}[h]
+\caption{Encodage des opérations de \texttt{mpt\_alu}.}
+\label{tab:alu-ops}
+\centering
+\begin{tabular}{@{}llll@{}}
+\toprule
+Code & Macro & Opération & Sortie \\
+\midrule
+\texttt{4'd0}  & \texttt{`ALU\_ADD}  & addition           & \texttt{alu\_result\_o} \\
+\texttt{4'd1}  & \texttt{`ALU\_SUB}  & soustraction       & \texttt{alu\_result\_o} \\
+\texttt{4'd2}  & \texttt{`ALU\_AND}  & ET logique         & \texttt{alu\_result\_o} \\
+\texttt{4'd3}  & \texttt{`ALU\_OR}   & OU logique         & \texttt{alu\_result\_o} \\
+\texttt{4'd4}  & \texttt{`ALU\_XOR}  & OU exclusif        & \texttt{alu\_result\_o} \\
+\texttt{4'd5}  & \texttt{`ALU\_SLL}  & décalage gauche logique  & \texttt{alu\_result\_o} \\
+\texttt{4'd6}  & \texttt{`ALU\_SRL}  & décalage droit logique   & \texttt{alu\_result\_o} \\
+\texttt{4'd7}  & \texttt{`ALU\_SRA}  & décalage droit arithmétique & \texttt{alu\_result\_o} \\
+\texttt{4'd8}  & \texttt{`ALU\_SEQ}  & test d'égalité           & \texttt{test\_result\_o} \\
+\texttt{4'd9}  & \texttt{`ALU\_SLT}  & inférieur signé          & \texttt{alu\_result\_o} et \texttt{test\_result\_o} \\
+\texttt{4'd10} & \texttt{`ALU\_SLTU} & inférieur non signé      & \texttt{alu\_result\_o} et \texttt{test\_result\_o} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Détails d'implémentation}
+Tous les décalages utilisent les cinq bits de poids faible de
+l'opérande~B (\texttt{alu\_op2\_i[4:0]}), le maximum significatif
+pour des opérandes de 32 bits ; les bits supérieurs sont
+silencieusement ignorés, conformément à la spécification.
+\texttt{ALU\_SRA} s'appuie sur l'opérateur Verilog \texttt{>>>}
+appliqué à \texttt{\$signed(alu\_op1\_i)}, qui force la
+réplication du bit de signe pendant le décalage. \texttt{ALU\_SLT}
+et \texttt{ALU\_SLTU} produisent un résultat ALU de 32 bits valant
+\texttt{32'd0} ou \texttt{32'd1}, dispositif réutilisé tel quel
+par les instructions \texttt{SLTI}/\texttt{SLTIU} (sortie
+\texttt{alu\_result\_o}) et par les branchements
+(\texttt{BLT}/\texttt{BGE}, sortie \texttt{test\_result\_o}). Le
+test d'égalité \texttt{ALU\_SEQ} alimente uniquement
+\texttt{test\_result\_o} et n'a pas de version arithmétique.
+Toutes les sorties par défaut sont initialisées à zéro afin
+d'empêcher l'inférence de verrous (\textit{latches}) lors de la
+synthèse.
+
+\section{Banc de registres -- \texttt{mpt\_regfile}}
+\label{sec:regfile}
+
+\subsection{Topologie}
+\texttt{mpt\_regfile} implémente une mémoire bi-port en lecture et
+mono-port en écriture, organisée en 32~mots de 32~bits. Le tableau
+\texttt{regfile\_data} est déclaré avec
+\texttt{REGFILE\_DEPTH = 32}, indexé par \texttt{rs1\_addr\_i},
+\texttt{rs2\_addr\_i} et \texttt{rd\_addr\_i}.
+
+
+\subsection{Choix de codage en vue de l'inférence RAM}
+Le toujours-bloc d'écriture omet volontairement toute clause
+\texttt{if(resetn\_i == 0)} de remise à zéro asynchrone des cases
+mémoire. Cette omission n'est pas un oubli mais un choix
+d'implémentation : la plupart des outils de synthèse modernes
+(notamment Vivado) reconnaissent ce style comme une mémoire
+distribuée multi-port et l'instancient sous forme de primitives
+\texttt{RAM32M}, ce qui économise plus d'un millier de
+flip-flops. Une initialisation à zéro est tout de même fournie
+\textit{pour la simulation} via un bloc \texttt{initial} qui
+parcourt le tableau, sans répercussion sur la synthèse.
+
+\subsection{Câblage de \texttt{x0} à zéro}
+La condition \texttt{(rd\_addr\_i != 0)} encadre la seule
+affectation au tableau mémoire et garantit qu'aucune écriture
+réelle ne peut s'effectuer sur \texttt{x0}, conformément à la
+sémantique RISC-V. Comme le tableau est initialisé à zéro lors de
+la simulation, et qu'aucun chemin ne peut le modifier,
+\texttt{regfile\_data[0]} reste invariant à \texttt{32'h00000000}
+pour toute la durée d'exécution.
+
+\section{Générateur d'adresses de branchement -- \texttt{mpt\_branchgen}}
+\label{sec:branchgen}
+
+\subsection{Pourquoi un additionneur séparé ?}
+L'ALU principale de l'étage EX est, dans le cas d'un branchement
+conditionnel, déjà occupée à comparer les deux opérandes
+(\texttt{ALU\_SEQ}, \texttt{ALU\_SLT}, \texttt{ALU\_SLTU}). Le
+calcul de l'adresse cible $PC + \text{imm}$ doit donc être
+effectué simultanément par un additionneur dédié placé en parallèle
+de l'ID. \texttt{mpt\_branchgen} remplit ce rôle.
+
+
+\subsection{Sélection de la base par \texttt{ID\_branch\_op\_i}}
+Le module distingue deux modes :
+\begin{itemize}
+  \item \texttt{`PC\_RELATIVE} (\texttt{2'b10}) : utilisé par les
+        branchements conditionnels et par \texttt{JAL}. La sortie
+        est calculée comme
+        $\texttt{ID\_pc\_i} +
+        \$\text{signed}(\texttt{ID\_imm2\_i})$ ;
+  \item \texttt{`REG\_OFFSET} (\texttt{2'b11}) : utilisé par
+        \texttt{JALR} uniquement. La base est la donnée du
+        registre \texttt{rs1}, après prise en compte d'un éventuel
+        renvoi local (voir ci-dessous).
+\end{itemize}
+
+\subsection{Renvoi local dédié à \texttt{JALR}}
+Une particularité importante de notre architecture est que
+\texttt{JALR}, en tant que saut résolu en ID, doit lire
+\texttt{rs1} \emph{avant} que l'éventuelle instruction qui produit
+\texttt{rs1} dans l'étage EX n'ait écrit son résultat. Pour éviter
+un blocage systématique, \texttt{mpt\_branchgen} embarque son
+propre multiplexeur 2-vers-1 : si \texttt{ID\_branch\_op\_i[1]}
+indique un \texttt{JALR}, que \texttt{EX\_rd\_wr\_en\_i} est actif
+et que \texttt{EX\_rd\_addr\_i == ID\_rs1\_addr\_i}, la donnée
+sélectionnée est \texttt{EX\_alu\_result\_i} (renvoi local) ; sinon
+c'est \texttt{ID\_rs1\_data\_i}. Ce renvoi est une
+\emph{seconde} occurrence de logique de renvoi dans le c\oe{}ur,
+distincte de celle de \texttt{mpt\_control}, et opère
+spécifiquement sur l'opérande de \texttt{JALR}.
+
+
+\section{Étage MEM -- Accès mémoire}
+\label{sec:mem}
+
+\subsection{Modèle de mémoire synchrone}
+La DMEM modélisée par le banc de test est synchrone~: la donnée
+demandée par \texttt{DMEM\_addr\_o} n'apparaît sur
+\texttt{DMEM\_rd\_data\_i} qu'au front d'horloge suivant. L'étage
+MEM est donc structuré en deux phases :
+\begin{itemize}
+  \item phase d'\emph{adresse} (combinatoire) : émission de
+        \texttt{DMEM\_addr\_o} et de \texttt{DMEM\_wr\_byte\_en\_o}
+        à partir des entrées EX du cycle courant ;
+  \item phase de \emph{donnée} (synchrone, un cycle plus tard) :
+        sélection et extension du sous-mot dans
+        \texttt{DMEM\_rd\_data\_i}, à l'aide de copies registrées
+        de \texttt{EX\_mem\_op\_i} et de
+        \texttt{EX\_alu\_result\_i[1:0]}.
+\end{itemize}
+
+\subsection{Alignement par mot et masque d'octet}
+\texttt{DMEM\_addr\_o} est systématiquement alignée par
+\texttt{\{EX\_alu\_result\_i[31:2], 2'b0\}}, ce qui force les deux
+bits de poids faible à zéro et garantit que la DMEM voit toujours
+des accès alignés sur 32 bits. Le décalage interne au mot est géré
+par \texttt{DMEM\_wr\_byte\_en\_o}, un masque sur 4~bits où
+chaque bit autorise l'écriture sur l'un des octets du mot. Le
+\Cref{tab:byteen} récapitule les masques générés selon le couple
+$(\texttt{EX\_mem\_op\_i}, \texttt{EX\_alu\_result\_i[1:0]})$.
+
+
+\begin{table}[h]
+\caption{Masque \texttt{DMEM\_wr\_byte\_en\_o} et alignement de
+\texttt{DMEM\_wr\_data\_o} pour les instructions de stockage.}
+\label{tab:byteen}
+\centering
+\begin{tabular}{@{}llll@{}}
+\toprule
+Instruction & Offset & Masque & Position de la donnée \\
+\midrule
+\texttt{SW} & \texttt{2'b00}   & \texttt{4'b1111} & \texttt{[31:0]} \\
+\texttt{SW} & autre            & --- & déclenche \texttt{misaligned\_store} \\
+\texttt{SH} & \texttt{2'b00}   & \texttt{4'b0011} & \texttt{[15:0]} \\
+\texttt{SH} & \texttt{2'b10}   & \texttt{4'b1100} & \texttt{[31:16]} \\
+\texttt{SH} & autre            & --- & déclenche \texttt{misaligned\_store} \\
+\texttt{SB} & \texttt{2'b00}   & \texttt{4'b0001} & \texttt{[7:0]} \\
+\texttt{SB} & \texttt{2'b01}   & \texttt{4'b0010} & \texttt{[15:8]} \\
+\texttt{SB} & \texttt{2'b10}   & \texttt{4'b0100} & \texttt{[23:16]} \\
+\texttt{SB} & \texttt{2'b11}   & \texttt{4'b1000} & \texttt{[31:24]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Détection des accès mal alignés}
+Le module asserte combinatoirement deux drapeaux,
+\texttt{misaligned\_store} et \texttt{misaligned\_load}, qui
+agrègent les conditions d'alignement violées : \texttt{SW} avec
+offset différent de \texttt{2'b00}, \texttt{SH} avec offset impair,
+\texttt{LW} avec offset non nul, ou \texttt{LH}/\texttt{LHU} avec
+offset impair. Toute occurrence est combinée avec
+\texttt{EX\_exception\_i} dans le toujours-bloc synchrone et
+remontée à la frontière MEM/WB sous le nom
+\texttt{MEM\_exception\_o}, lui-même propagé par le module
+enveloppe vers le port externe \texttt{exception\_o}.
+
+
+\subsection{Extraction et extension des chargements}
+La phase de donnée des chargements est entièrement combinatoire et
+sélectionne la portion du mot lu en fonction de
+\texttt{byte\_addr} (les deux bits de poids faible
+échantillonnés). Pour \texttt{LB} et \texttt{LH}, la portion
+extraite est étendue par signe via la concaténation
+$\{24\{\texttt{DMEM\_rd\_data\_i}[k]\}\}$ ou
+$\{16\{\texttt{DMEM\_rd\_data\_i}[k]\}\}$. Pour \texttt{LBU} et
+\texttt{LHU}, la concaténation utilise \texttt{1'b0}, ce qui
+réalise une extension par zéro. \texttt{LW} est un passage direct
+sans modification.
+
+\subsection{Renvoi MEM-to-MEM}
+Le multiplexeur \texttt{ForwardM\_i} sélectionne la donnée
+effectivement écrite en mémoire par un \texttt{SW}/\texttt{SH}/\texttt{SB} :
+soit \texttt{EX\_rs2\_data\_i} (cas standard), soit
+\texttt{MEM\_alu\_result\_o} si l'instruction qui produit
+\texttt{rs2} se trouve juste devant à la frontière MEM/WB.
+Cette logique sera examinée plus en détail au \Cref{ch:hazards}.
+
+\section{Étage WB -- Écriture en retour}
+\label{sec:wb}
+
+\texttt{mpt\_WB\_stage} ne contient \emph{aucun} flip-flop : ses
+trois sorties \texttt{WB\_rd\_addr\_o},
+\texttt{WB\_rd\_wr\_en\_o} et \texttt{WB\_rd\_wr\_data\_o} sont
+produites par un toujours-bloc combinatoire. La valeur écrite est
+issue d'un multiplexeur 2-vers-1 piloté par
+\texttt{MEM\_memtoreg\_i} :
+\[
+\texttt{WB\_rd\_wr\_data\_o} =
+\begin{cases}
+\texttt{MEM\_dout\_i}        & \text{si \texttt{MEM\_memtoreg\_i = 1} (chargement)} \\
+\texttt{MEM\_alu\_result\_i} & \text{sinon (résultat ALU ou $PC + 4$)}
+\end{cases}
+\]
+Le caractère combinatoire de l'étage WB est rendu acceptable par
+le fait que le port d'écriture du banc de registres est lui-même
+synchrone : la donnée présentée traverse pendant un demi-cycle
+puis est verrouillée au prochain front montant dans
+\texttt{regfile\_data[rd\_addr]}. La même donnée est, en parallèle,
+réinjectée dans l'étage ID via le réseau de renvoi interne
+ID-WB et, dans l'étage EX, via la branche \texttt{forwardX = 2'b01}
+des multiplexeurs d'opérande.
+
+
+%==============================================================================
+\chapter{Gestion des aléas}
+\label{ch:hazards}
+
+\section{Taxonomie des aléas}
+Trois familles d'aléas peuvent perturber un pipeline en ordre. La
+première, dite des \emph{aléas de données}, regroupe les
+dépendances de type lecture-après-écriture (RAW) entre une
+instruction productrice et une instruction consommatrice
+suffisamment proches pour que la lecture se présente avant que
+l'écriture ne soit visible dans le banc de registres. La deuxième,
+spécifique au sous-cas où la productrice est un chargement, est
+l'\emph{aléa charge-utilisation}: la donnée n'existe physiquement
+qu'à la fin du cycle MEM et ne peut donc pas être renvoyée à
+l'étage EX du cycle suivant ; elle nécessite un cycle de blocage.
+La troisième, l'\emph{aléa de contrôle}, naît des branchements et
+des sauts dont la cible n'est connue qu'après le cycle de fetch
+suivant ; les instructions fetchées spéculativement après le
+branchement doivent être annulées si la branche est prise. Les
+trois mécanismes correspondants---renvoi, blocage et vidage---sont
+centralisés dans \texttt{mpt\_control}.
+
+\section{Renvoi vers l'ALU : \texttt{forwardA} et \texttt{forwardB}}
+\label{sec:forward-ab}
+
+\subsection{Codage}
+Les sorties \texttt{forwardA\_o} et \texttt{forwardB\_o} sont des
+sélecteurs sur deux bits dont la sémantique est :
+\begin{description}
+  \item[\texttt{2'b00}] aucun aléa --- les opérandes proviennent
+        de l'étage ID via \texttt{ID\_rs\{1,2\}\_data\_i} ou de
+        l'immédiat ;
+  \item[\texttt{2'b10}] aléa EX --- la donnée provient de la
+        sortie EX/MEM \texttt{EX\_alu\_result\_o}, c'est-à-dire de
+        l'instruction qui se trouvait dans EX au cycle précédent ;
+  \item[\texttt{2'b01}] aléa MEM/WB --- la donnée provient du
+        bus \texttt{WB\_rd\_wr\_data\_i}, c'est-à-dire de
+        l'instruction qui se trouvait dans MEM au cycle
+        précédent et qui se trouve maintenant dans WB.
+\end{description}
+
+
+\subsection{Conditions de déclenchement}
+Pour \texttt{forwardA\_o}, l'aléa EX est asserté si et seulement
+si :
+\begin{enumerate}
+  \item \texttt{EX\_rd\_wr\_en\_i = 1} (l'instruction en EX est
+        productrice) ;
+  \item \texttt{EX\_rd\_addr\_i != 0} (elle ne cible pas
+        \texttt{x0}) ;
+  \item \texttt{EX\_rd\_addr\_i == ID\_rs1\_addr\_i} (la
+        destination correspond à \texttt{rs1} de l'instruction en
+        ID) ;
+  \item \texttt{ID\_alu\_source\_sel\_i[1] != 1} (l'instruction
+        en ID consomme effectivement \texttt{rs1} et non un
+        immédiat).
+\end{enumerate}
+L'aléa MEM/WB est exprimé par une condition exactement analogue
+sur \texttt{MEM\_rd\_addr\_i}, à laquelle s'ajoute une priorité
+explicite : l'aléa MEM/WB n'est asserté que si l'aléa EX
+\emph{ne l'est pas déjà} pour le même registre. Cette dépriorité
+est essentielle car les deux aléas peuvent simultanément concerner
+la même destination (deux instructions consécutives écrivant
+toutes deux dans \texttt{x5}, suivies d'une consommation de
+\texttt{x5}); seul le \og{}plus jeune\fg{} renvoi, celui d'EX, doit
+être pris.
+\texttt{forwardB\_o} reproduit identiquement cette logique en
+substituant \texttt{rs2} à \texttt{rs1} et
+\texttt{ID\_alu\_source\_sel\_i[0]} à
+\texttt{ID\_alu\_source\_sel\_i[1]}.
+
+
+\subsection{Sortie inutilisée pour \texttt{x0}}
+Le test \texttt{!= 0} est dupliqué dans toutes les conditions et
+sur les deux sélecteurs. L'objectif n'est pas une simple
+optimisation : sans cette garde, une instruction qui calcule
+artificiellement vers \texttt{x0} (par exemple
+\texttt{ADD x0, x1, x2}, présente dans certaines suites comme
+construction \og{}rebut\fg{}) provoquerait un faux renvoi et
+remplacerait une donnée valide par zéro. La discipline est
+appliquée dans tout le c\oe{}ur (décodeur, banc de registres,
+unité de contrôle) et constitue un des invariants les plus
+importants de la conception.
+
+\section{Renvoi MEM-to-MEM : \texttt{forwardM}}
+Le sélecteur \texttt{forwardM\_o} est un signal sur un bit qui
+contrôle un multiplexeur 2-vers-1 placé en entrée de
+\texttt{DMEM\_wr\_data\_o}. Il est asserté lorsque les trois
+conditions suivantes sont réunies :
+\begin{enumerate}
+  \item \texttt{MEM\_rd\_wr\_en\_i = 1} (l'instruction qui se
+        trouve dans WB \emph{ce} cycle écrit bien un résultat) ;
+  \item \texttt{EX\_rs2\_addr\_i == MEM\_rd\_addr\_i} (la donnée
+        à écrire en mémoire correspond au registre destination en
+        cours d'écriture) ;
+  \item \texttt{MEM\_rd\_addr\_i != 0}.
+\end{enumerate}
+Sa raison d'être est de couvrir le motif \og{}charge-puis-stocke\fg{}
+sans nécessiter de blocage : entre une charge \texttt{LW x5,
+0(x10)} et une écriture \texttt{SW x5, 0(x11)} séparées par une
+seule instruction, la donnée chargée n'apparaît dans
+\texttt{MEM\_alu\_result\_o} (au sens du registre WB) qu'au cycle
+où elle est requise par le \texttt{SW} ; le multiplexeur
+\texttt{forwardM} la dévie directement vers
+\texttt{DMEM\_wr\_data\_o}.
+
+
+\section{Aléa charge-utilisation : \texttt{stall\_o}}
+\label{sec:stall}
+
+\subsection{Origine}
+Aucun renvoi ne peut résoudre le motif suivant :
+\begin{lstlisting}[caption={Motif charge-utilisation
+imposant un blocage d'un cycle.},captionpos=b]
+LW   x5, 0(x10)   ; produit x5 en MEM
+ADD  x6, x5, x7   ; consomme x5 en EX
+\end{lstlisting}
+La donnée \texttt{x5} n'existe physiquement qu'à la fin du cycle
+MEM, alors que le \texttt{ADD} en a besoin en début de cycle EX.
+Un cycle de bulle est donc structurellement nécessaire.
+
+\subsection{Mécanisme}
+\texttt{mpt\_control} détecte ce motif au moyen d'une unique
+fenêtre combinatoire : si \texttt{ID\_mem\_rd\_en\_i} est actif (la
+chargeuse est en ID) et que l'opcode de l'instruction \emph{en
+cours de fetch} (\texttt{IF\_instruction\_i[6:0]}) consomme un
+registre qui correspond à \texttt{ID\_rd\_addr\_i}, alors
+\texttt{stall\_o} est asserté. La détection couvre les huit
+opcodes de RV32I qui lisent un registre source : \texttt{OP},
+\texttt{BRANCH} et \texttt{STORE} comparent à la fois sur
+\texttt{IF\_instruction\_i[19:15]} (rs1) et
+\texttt{IF\_instruction\_i[24:20]} (rs2) ; \texttt{OP\_IMM} et
+\texttt{LOAD} comparent uniquement sur rs1.
+Lorsque \texttt{stall\_o} est asserté, trois actions se
+produisent simultanément :
+\begin{itemize}
+  \item l'étage IF rejoue \texttt{IMEM\_addr\_o - 4} (cf.\
+        \Cref{sec:if}), ce qui revient à figer le PC ;
+  \item l'étage ID gèle son registre pipeline mais force
+        \texttt{ID\_mem\_wr\_en\_o},
+        \texttt{ID\_mem\_rd\_en\_o},
+        \texttt{ID\_rd\_wr\_en\_o} et
+        \texttt{ID\_jump\_en\_o} à zéro---c'est l'injection de
+        bulle décrite au \Cref{sec:id} ;
+  \item l'étage EX traite la bulle exactement comme une
+        instruction inoffensive ; le \texttt{LW} bloqué un cycle
+        plus tôt avance vers MEM, et au cycle suivant le
+        consommateur peut récupérer la valeur via le renvoi
+        MEM/WB (\texttt{forwardA = 2'b01} ou
+        \texttt{forwardB = 2'b01}).
+\end{itemize}
+
+
+\section{Aléas de contrôle : \textit{flushes}}
+\label{sec:flush}
+
+\subsection{Détermination de la prise de branche}
+\texttt{mpt\_control} reçoit deux signaux résolus par les étages
+en aval : \texttt{ID\_jump\_en\_i}, asserté combinatoirement par
+le décodeur en ID dès qu'il s'agit d'un \texttt{JAL} ou d'un
+\texttt{JALR}, et \texttt{EX\_branch\_en\_i}, asserté par
+\texttt{mpt\_EX\_stage} le cycle suivant lorsqu'un branchement
+conditionnel s'avère effectivement pris. La disjonction de ces
+deux signaux fournit la condition de \textit{flush}.
+
+\subsection{Fenêtre de \textit{flush} sur deux cycles}
+Comme l'instruction qui suit le branchement est déjà dans IF (et
+parfois dans ID) lorsque la prise est confirmée en EX, deux
+cycles d'instructions spéculatives peuvent contaminer le pipeline.
+\texttt{mpt\_control} étend par conséquent le \textit{flush} sur
+deux cycles à l'aide de deux variables internes :
+\begin{lstlisting}[caption={Étalement du flush IF/ID sur deux
+cycles d'horloge.},captionpos=b]
+always @* IF_ID_Flush1 = (EX_branch_en_i || ID_jump_en_i);
+always @(posedge clk_i)
+    if (resetn_i == 0) IF_ID_Flush2 <= 0;
+    else               IF_ID_Flush2 <= IF_ID_Flush1;
+assign IF_ID_flush_o = IF_ID_Flush1 || IF_ID_Flush2;
+\end{lstlisting}
+\texttt{IF\_ID\_Flush1} est combinatoire et active immédiatement
+le vidage le cycle où la prise est détectée ;
+\texttt{IF\_ID\_Flush2} est sa version retardée d'un cycle et
+prolonge l'effet de vidage sur le cycle suivant. La sortie
+\texttt{IF\_ID\_flush\_o} est leur disjonction.
+
+
+\subsection{\textit{Flush} de l'étage EX}
+Pour les branchements conditionnels résolus en EX, l'instruction
+qui était dans EX en même temps que le branchement (et donc
+incorrectement spéculée) doit elle aussi être convertie en bulle.
+\texttt{mpt\_control} produit pour cela
+\texttt{EX\_flush\_o = EX\_branch\_en\_i}. Ce signal alimente le
+toujours-bloc synchrone du registre EX/MEM
+(\Cref{sec:ex}) qui efface alors les autorisations destructives.
+
+\subsection{Coût total des aléas de contrôle}
+La pénalité observée est de deux cycles pour les branchements
+conditionnels pris (un \textit{flush} IF/ID + un \textit{flush}
+EX) et d'un cycle pour les sauts inconditionnels résolus en ID
+(\textit{flush} IF/ID seul). Les branchements non pris coûtent
+zéro cycle, le pipeline ayant correctement spéculé en faveur du
+chemin séquentiel.
+
+\section{Renvoi interne au banc de registres et à l'étage ID}
+Outre les chemins centralisés dans \texttt{mpt\_control}, le
+c\oe{}ur compte deux renvois locaux qui méritent d'être traités
+comme partie intégrante de la stratégie d'aléas :
+\begin{itemize}
+  \item le renvoi WR-RD interne à \texttt{mpt\_regfile}, qui
+        substitue \texttt{rd\_wr\_data\_i} aux sorties
+        \texttt{rs1\_data\_o} et \texttt{rs2\_data\_o} lorsqu'une
+        écriture et une lecture du même registre se présentent au
+        même cycle (\Cref{sec:regfile}) ;
+  \item le renvoi local au générateur de branchement,
+        \texttt{mpt\_branchgen}, qui résout l'aléa propre à
+        \texttt{JALR} en captant
+        \texttt{EX\_alu\_result\_i} si l'instruction en EX produit
+        \texttt{rs1} (\Cref{sec:branchgen}).
+\end{itemize}
+Conjugués au mécanisme central, ces renvois locaux suffisent à
+maintenir \texttt{mpt\_control} dans une logique purement
+combinatoire en dehors du flip-flop \texttt{IF\_ID\_Flush2}.
+
+
+%==============================================================================
+\chapter{Détails d'implémentation Verilog}
+\label{ch:impl}
+
+Ce chapitre regroupe les choix d'implémentation transversaux qui
+ont été préservés dans tout le c\oe{}ur, sans être propres à un
+étage en particulier. Ils constituent un \og{}style maison\fg{}
+qui contribue autant à la lisibilité qu'à la fiabilité de la
+synthèse.
+
+\section{Conventions de codage}
+\subsection{Préfixe par étage}
+Tout signal porte un préfixe désignant l'étage où il est
+\emph{produit} : \texttt{IF\_*}, \texttt{ID\_*}, \texttt{EX\_*},
+\texttt{MEM\_*} et \texttt{WB\_*}. Un signal traversant plusieurs
+étages conserve le préfixe de l'étage qui le verrouille la
+dernière fois. Cette convention permet une lecture du fichier
+\texttt{mpt\_top.v} en flot continu : un signal en
+\texttt{EX\_alu\_result} a forcément été produit par EX et est
+consommé par MEM ou par les chemins de renvoi.
+
+\subsection{\texttt{`default\_nettype none}}
+Le module \texttt{mpt\_top.v} commence par
+\texttt{`default\_nettype none}, qui désactive la création
+implicite de \texttt{wire} d'un seul bit. Toute déclaration doit
+être explicite, ce qui transforme une coquille de typage---par
+exemple un signal mal orthographié dans une instanciation---en
+erreur de compilation plutôt qu'en \texttt{wire} fantôme câblé à
+l'air libre. Les modules de stage suivent cette discipline.
+
+\subsection{Suffixes de port}
+Les ports d'entrée et de sortie sont systématiquement suffixés en
+\texttt{\_i} ou \texttt{\_o}. Cette convention rend la lecture
+d'une instanciation immédiate : aucune ambiguïté sur la direction
+n'est possible. Les signaux internes au module n'utilisent pas ces
+suffixes, ce qui distingue visuellement la frontière du module.
+
+
+\section{Stratégie de réinitialisation}
+\subsection{Synchronisme et polarité}
+La réinitialisation \texttt{resetn\_i} est active à l'état bas et
+\emph{synchrone} sur l'horloge système (la liste de sensibilité
+des toujours-blocs concernés ne contient pas
+\texttt{negedge resetn\_i}). Ce choix simplifie l'analyse de
+synchronisation statique, au prix d'une exigence : une remise à
+zéro fiable nécessite que \texttt{clk\_i} soit déjà actif lorsque
+\texttt{resetn\_i} bascule. Le banc de test impose cette propriété
+en générant \texttt{Clk} avant de retirer \texttt{Reset\_n}.
+
+\subsection{Couverture de la réinitialisation}
+Tous les flip-flops du chemin de contrôle (sélecteurs ALU,
+autorisations mémoire, \texttt{rd\_wr\_en}) sont remis à zéro par
+\texttt{resetn\_i}. En revanche, certains chemins de données
+(banc de registres, deuxième flip-flop de \textit{flush}) n'ont
+pas de remise à zéro asynchrone, soit pour permettre l'inférence
+RAM, soit parce que leur valeur est immédiatement écrasée par le
+fonctionnement normal.
+
+\section{Encodage du NOP architectural}
+La constante \texttt{32'h00000000} se décode en
+\texttt{ADDI x0, x0, 0} : opération arithmétique à faible coût qui
+n'écrit rien (la cible étant \texttt{x0}) et n'a pas d'effet
+mémoire. C'est la valeur utilisée par l'étage IF pour le
+\textit{flush}, et la valeur initiale de
+\texttt{IF\_instruction\_o} en réinitialisation. Aucun autre
+encodage n'est nécessaire pour générer une bulle.
+
+
+\section{Paramétrage par le fichier d'en-tête}
+Le fichier \texttt{mpt\_definitions.vh} centralise toutes les
+constantes liées au jeu d'instructions et à l'ALU :
+\begin{itemize}
+  \item les codes opération (\texttt{`OPCODE\_OP},
+        \texttt{`OPCODE\_LOAD}, \dots) ;
+  \item les sous-codes \texttt{FUNCT3} et \texttt{FUNCT7}
+        nécessaires à la distinction \texttt{ADD}/\texttt{SUB},
+        \texttt{SRL}/\texttt{SRA} et aux six prédicats de
+        branchement ;
+  \item les codes ALU (\texttt{`ALU\_ADD} \dots\ \texttt{`ALU\_SLTU}) ;
+  \item les codes d'opération mémoire (\texttt{`MEM\_LW},
+        \texttt{`MEM\_LB}, \dots, \texttt{`MEM\_SW}) ;
+  \item les modes de branchement \texttt{`PC\_RELATIVE} et
+        \texttt{`REG\_OFFSET} ;
+  \item les encodages binaires complets \texttt{`ECALL} et
+        \texttt{`EBREAK}.
+\end{itemize}
+Ce fichier est inclus directement dans la liste des paramètres de
+chaque module via \texttt{`include "mpt\_definitions.vh"} placé
+\emph{avant} la liste de paramètres formels. Cette technique,
+quoique inhabituelle, permet aux toujours-blocs internes de
+référencer les macros sans qu'elles ne deviennent une dépendance
+externe explicite.
+
+\section{Prévention des verrous combinatoires}
+Tous les toujours-blocs combinatoires (\texttt{always@*}) du
+c\oe{}ur affectent une valeur par défaut à toutes leurs sorties
+avant l'instruction \texttt{case}. Cette discipline interdit
+formellement à la synthèse d'inférer un \textit{latch}
+implicite : si aucun branchement de \texttt{case} ne s'applique,
+la valeur par défaut, généralement \texttt{0}, prend le relais.
+Le décodeur, l'ALU et les multiplexeurs de l'étage EX appliquent
+tous trois cette règle. Pour le décodeur en particulier,
+l'oubli d'une valeur par défaut sur l'un quelconque des dix-sept
+signaux de contrôle suffirait à introduire un comportement
+non spécifié pour les opcodes hors RV32I.
+
+
+\section{Cycle de horloge unique}
+Le c\oe{}ur n'utilise qu'un domaine d'horloge : tous les
+flip-flops sont sensibles au front montant de \texttt{clk\_i}.
+Aucun chemin n'effectue de capture sur le front descendant, ce
+qui supprime les pièges classiques de duty-cycle et permet
+d'utiliser des horloges générées à n'importe quelle fréquence.
+La granularité fine de l'analyse de synchronisation incombe à
+l'utilisateur : la fréquence maximale exploitable dépend du
+chemin combinatoire le plus long, dont les candidats principaux
+sont (i) le décodeur suivi du multiplexeur \texttt{forwardA}
+suivi de l'ALU et (ii) le banc de registres suivi du
+multiplexeur \texttt{forwardM} dans MEM.
+
+\section{Mode de simulation et option \texttt{CUSTOM\_DEFINE}}
+Chaque module ouvre par une garde
+\texttt{`ifdef CUSTOM\_DEFINE} qui permet de remplacer les
+paramètres locaux par des macros définies dans un fichier global
+\texttt{defines.vh}. Cette indirection est utilisée par certains
+flots de synthèse spécifiques (par exemple Vivado IP-Integrator)
+pour propager une largeur de chemin de données différente sans
+modifier les modules. En l'absence de \texttt{CUSTOM\_DEFINE},
+les paramètres locaux par défaut prévalent et le c\oe{}ur reste
+compatible avec un simulateur standard tel qu'Icarus Verilog.
+
+
+%==============================================================================
+\chapter{Vérification et résultats du banc de test}
+\label{ch:verif}
+
+\section{Méthodologie générale}
+La conformité du c\oe{}ur est vérifiée par exécution de la suite
+officielle \texttt{rv32ui-p} maintenue par RISC-V International.
+Cette suite fournit un test par instruction du sous-jeu utilisateur
+RV32I, plus six tests structurels (\texttt{simple},
+\texttt{fence\_i}, \texttt{ld\_st}, \texttt{st\_ld},
+\texttt{ma\_data}, \texttt{sltiu}). Chaque test est compilé une
+fois pour toutes en image hexadécimale par
+\texttt{riscv-gnu-toolchain} puis stocké dans
+\texttt{rtl/mem/hex/}. Le banc de test \texttt{testbench.v}
+parcourt ensuite séquentiellement les 42 fichiers et reporte un
+verdict \emph{passant} ou \emph{échouant} pour chacun.
+
+\section{Architecture du banc de test}
+\subsection{Mémoire unifiée}
+Le banc de test modélise une mémoire unifiée
+\texttt{MEMORY[0:0x3FFF]}, soit 16~384 mots de 32 bits (64~Kio).
+Cette taille a été spécifiquement dimensionnée pour couvrir le
+test \texttt{rv32ui-p-ld\_st}, dont la zone
+\texttt{begin\_signature} se trouve à l'adresse octet
+\texttt{0x4000}, soit l'index de mot \texttt{0x1000} ; la
+configuration initiale à \texttt{0x0FFF} provoquait un blocage
+du pipeline car la lecture hors-tableau renvoyait \texttt{X} et
+contaminait le PC. La rectification a consisté à doubler la
+taille à \texttt{0x3FFF}, ce qui couvre toutes les zones de
+signature des 42 tests.
+
+
+\subsection{Modélisation Harvard à port unique}
+Bien que le c\oe{}ur expose une interface Harvard, le banc de
+test relie l'IMEM et la DMEM au même tableau \texttt{MEMORY},
+selon la convention \og{}pure Von Neumann en simulation\fg{}.
+L'opération est légitime parce que les programmes
+\texttt{rv32ui-p} ne réécrivent jamais leur propre code : la
+distinction conceptuelle reste valide même si la même mémoire
+sert physiquement aux deux ports.
+
+\subsection{Génération de la donnée de lecture}
+Le toujours-bloc principal du banc de test simule un comportement
+de RAM synchrone à un cycle de latence : à chaque front montant,
+\texttt{IMEM\_data} reçoit \texttt{MEMORY[IMEM\_addr[31:2]]} et
+\texttt{DMEM\_rd\_data} reçoit
+\texttt{MEMORY[DMEM\_addr[31:2]]}. Pour les écritures, les quatre
+bits de \texttt{DMEM\_wr\_byte\_en} sont consommés
+indépendamment, chacun activant l'octet correspondant du mot
+ciblé. Cette structure miroite exactement l'interface attendue
+par l'étage MEM, à savoir un masque d'octet sur 4 bits avec
+adresse alignée sur 32 bits.
+
+\section{Détection automatique de réussite}
+\subsection{Convention \texttt{tohost}}
+Les programmes \texttt{rv32ui-p} terminent en stockant un code
+de sortie dans une variable architecturale \texttt{tohost}, qui
+correspond, à l'issue d'un test réussi, au triplet
+\texttt{x3 = 1}, \texttt{x17 = 93}, \texttt{x10 = 0}. La valeur
+\texttt{93} est la convention historique \og{}success\fg{} du test
+harness officiel ; \texttt{x3} sert d'indicateur de phase et
+\texttt{x10} retourne le code d'erreur du test, nul pour un
+succès.
+
+
+\subsection{Implémentation dans \texttt{EVAL\_TEST}}
+La tâche \texttt{EVAL\_TEST} échantillonne en continu les trois
+registres ciblés via une référence hiérarchique~:
+\texttt{UUT.id\_stage\_i.regfile\_i.regfile\_data[3]},
+\texttt{[17]} et \texttt{[10]}. À chaque front montant, trois
+conditions sont évaluées dans l'ordre :
+\begin{enumerate}
+  \item \emph{succès} : le triplet vaut $(1,93,0)$ ;
+  \item \emph{échec d'exception} : la sortie
+        \texttt{Exception} est assertée, indiquant un
+        \texttt{ECALL}, un \texttt{EBREAK} ou un accès mal
+        aligné ;
+  \item \emph{watchdog} : le compteur local \texttt{t} a
+        atteint $99\,999$ cycles sans que ni succès ni
+        exception ne se soient manifestés ; le cas typique est
+        un blocage de pipeline ou une boucle infinie.
+\end{enumerate}
+Le verdict est imprimé sur la sortie standard avec
+l'identifiant du test, et les compteurs \texttt{passed\_tests}
+et \texttt{failed\_tests} sont incrémentés en conséquence.
+
+\subsection{Désaffectation entre tests}
+Avant chaque test, la tâche \texttt{LOAD\_TEST} effectue deux
+opérations critiques : la mise à zéro de l'intégralité du
+tableau \texttt{MEMORY}, puis la mise à zéro forcée des 32~cases
+\texttt{regfile\_data} via une boucle de référence
+hiérarchique. Cette seconde étape est indispensable : sans elle,
+les valeurs résiduelles du test précédent (en particulier le
+triplet $x_3, x_{17}, x_{10}$) déclencheraient un faux succès
+au tout premier cycle du test suivant, avant même que le
+chargement de la nouvelle image n'ait eu lieu.
+
+
+\section{Suite de tests}
+La suite couvre :
+\begin{itemize}
+  \item dix tests de type R (\texttt{ADD}, \texttt{SUB},
+        \texttt{AND}, \texttt{OR}, \texttt{XOR},
+        \texttt{SLT}, \texttt{SLTU}, \texttt{SLL}, \texttt{SRL},
+        \texttt{SRA}) ;
+  \item huit tests de type I (\texttt{ADDI}, \texttt{ANDI},
+        \texttt{ORI}, \texttt{XORI}, \texttt{SLTI},
+        \texttt{SLLI}, \texttt{SRLI}, \texttt{SRAI}) plus
+        \texttt{SLTIU} ;
+  \item six tests de type B (\texttt{BEQ}, \texttt{BNE},
+        \texttt{BLT}, \texttt{BGE}, \texttt{BLTU},
+        \texttt{BGEU}) ;
+  \item deux tests de type U (\texttt{LUI}, \texttt{AUIPC}) ;
+  \item deux tests de saut (\texttt{JAL}, \texttt{JALR}) ;
+  \item cinq tests de chargement (\texttt{LB}, \texttt{LH},
+        \texttt{LW}, \texttt{LBU}, \texttt{LHU}) ;
+  \item trois tests de stockage (\texttt{SB}, \texttt{SH},
+        \texttt{SW}) ;
+  \item six tests structurels (\texttt{simple},
+        \texttt{fence\_i}, \texttt{ld\_st}, \texttt{st\_ld},
+        \texttt{ma\_data}).
+\end{itemize}
+
+
+\subsection{Tableau récapitulatif}
+Le \Cref{tab:tests} présente la liste complète des tests avec leur
+identifiant numérique tel qu'utilisé dans
+\texttt{testbench.v}.
+
+\begin{table}[H]
+\caption{Liste des 42 tests \texttt{rv32ui-p} exécutés.}
+\label{tab:tests}
+\centering
+\small
+\begin{tabular}{@{}cl|cl|cl@{}}
+\toprule
+ID & Test & ID & Test & ID & Test \\
+\midrule
+0  & \texttt{add}   & 14 & \texttt{slti}  & 28 & \texttt{lb}      \\
+1  & \texttt{sub}   & 15 & \texttt{slli}  & 29 & \texttt{lh}      \\
+2  & \texttt{and}   & 16 & \texttt{srli}  & 30 & \texttt{lw}      \\
+3  & \texttt{or}    & 17 & \texttt{srai}  & 31 & \texttt{lbu}     \\
+4  & \texttt{xor}   & 18 & \texttt{beq}   & 32 & \texttt{lhu}     \\
+5  & \texttt{slt}   & 19 & \texttt{bne}   & 33 & \texttt{sb}      \\
+6  & \texttt{sltu}  & 20 & \texttt{blt}   & 34 & \texttt{sh}      \\
+7  & \texttt{sll}   & 21 & \texttt{bge}   & 35 & \texttt{sw}      \\
+8  & \texttt{srl}   & 22 & \texttt{bltu}  & 36 & \texttt{sltiu}   \\
+9  & \texttt{sra}   & 23 & \texttt{bgeu}  & 37 & \texttt{simple}  \\
+10 & \texttt{addi}  & 24 & \texttt{lui}   & 38 & \texttt{fence\_i}\\
+11 & \texttt{andi}  & 25 & \texttt{auipc} & 39 & \texttt{ld\_st}  \\
+12 & \texttt{ori}   & 26 & \texttt{jal}   & 40 & \texttt{st\_ld}  \\
+13 & \texttt{xori}  & 27 & \texttt{jalr}  & 41 & \texttt{ma\_data}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Mode de lancement}
+Le testbench reconnaît deux modes de fonctionnement :
+\begin{itemize}
+  \item \emph{mode régression} : invoqué par
+        \texttt{+runall} sur la ligne de commande du simulateur,
+        il exécute séquentiellement les 42 tests, imprime un
+        bilan agrégé et termine avec un code de retour
+        \texttt{1} si au moins un test échoue ou \texttt{0} en
+        cas de succès complet ;
+  \item \emph{mode diagnostic} : sans argument, le testbench
+        n'exécute que le test pointé par la macro
+        \texttt{`TEST\_TO\_RUN}, ce qui facilite le débogage
+        ciblé d'un seul test en isolation.
+\end{itemize}
+
+\section{Capture de formes d'onde}
+Pour faciliter l'analyse \textit{post-mortem} d'un éventuel
+échec, le testbench déclenche au démarrage les directives
+\texttt{\$dumpfile("testbench.vcd")} et
+\texttt{\$dumpvars(0, testbench)}. Une boucle complémentaire
+parcourt les 32~cases du banc de registres et émet pour chacune
+une directive \texttt{\$dumpvars}, ce qui les rend visibles
+nominativement dans GTKWave. Un test échouant peut ainsi être
+rejoué en diagnostic, son fichier VCD ouvert et la divergence
+de registre identifiée à un cycle près.
+
+
+\section{Résultats obtenus}
+\subsection{Bilan agrégé}
+À l'issue du mode \texttt{+runall}, le testbench imprime sur
+la sortie standard :
+\begin{verbatim}
+=====================================================================
+                      SUITE REGRESSION SUMMARY
+=====================================================================
+  TOTAL TESTS RUN : 42
+  PASSED          : 42
+  FAILED          :  0
+=====================================================================
+ [RESULT] REGRESSION STATUS: SUCCESS! ALL CORE STRUCTURAL
+                              TESTS PASSED.
+=====================================================================
+\end{verbatim}
+Tous les tests de la suite officielle sont franchis sans
+exception ni dépassement du watchdog.
+
+\subsection{Pénalité moyenne par test}
+Le nombre de cycles consommés par chaque test s'étale typiquement
+entre quelques centaines (par exemple \texttt{add},
+\texttt{addi}) et quelques milliers (\texttt{ld\_st},
+\texttt{ma\_data}, qui exécutent des centaines d'accès mémoire
+consécutifs). Le watchdog à $10^5$ cycles laisse une marge
+confortable d'environ deux ordres de grandeur, ce qui permet
+d'exclure les blocages éventuels sans pour autant tolérer
+silencieusement une boucle infinie.
+
+
+%==============================================================================
+\chapter{Discussion}
+\label{ch:discussion}
+
+\section{Limitations actuelles}
+\subsection{Périmètre fonctionnel}
+Le c\oe{}ur n'implémente que le sous-jeu utilisateur RV32I. Les
+limitations délibérées suivantes sont à signaler à tout
+intégrateur :
+\begin{itemize}
+  \item absence des extensions standard (\texttt{M} pour la
+        multiplication et la division entières,
+        \texttt{A} pour les atomiques, \texttt{F}/\texttt{D} pour
+        la virgule flottante simple et double précision,
+        \texttt{C} pour les instructions compressées) ;
+  \item absence du fichier de registres de contrôle et statut
+        (CSR) et donc de tous les compteurs architecturaux,
+        notamment \texttt{cycle}, \texttt{time},
+        \texttt{instret} ;
+  \item absence d'architecture privilégiée : ni mode superviseur
+        ni mode machine, ni gestion de trappes via
+        \texttt{mtvec}/\texttt{mepc}/\texttt{mcause}, ni
+        traitement des interruptions externes ;
+  \item gestion des accès mémoire mal alignés réduite à
+        l'émission d'un signal d'exception, sans mécanisme de
+        dépose en plusieurs cycles ;
+  \item interface mémoire idéalisée, sans cache, sans contrôle
+        de cohérence et sans protocole de bus standard.
+\end{itemize}
+
+
+\subsection{Performances}
+Les pénalités observables sont :
+\begin{itemize}
+  \item un cycle de bulle pour chaque aléa charge-utilisation ;
+  \item un cycle de \textit{flush} après chaque saut
+        inconditionnel pris (\texttt{JAL}, \texttt{JALR}) ;
+  \item deux cycles de \textit{flush} après chaque branchement
+        conditionnel pris ;
+  \item zéro cycle pour un branchement non pris.
+\end{itemize}
+Aucun mécanisme de prédiction de branchement n'est implémenté ; la
+politique de prédiction implicite est \og{}non pris\fg{}, ce qui
+favorise les codes à boucles courtes mais alourdit les codes à
+saut fréquent.
+
+\section{Compromis de conception}
+\subsection{Centralisation de la logique d'aléas}
+Le choix d'un module \texttt{mpt\_control} unique, gérant à la
+fois \texttt{forwardA}, \texttt{forwardB}, \texttt{forwardM},
+\texttt{stall} et les deux \textit{flushes}, présente un avantage
+clair : la politique d'aléas est entièrement vérifiable dans un
+unique fichier, et chaque condition est exprimée dans le même
+style structurel. L'inconvénient est un chemin combinatoire long
+qui combine la sortie du décodeur, les comparateurs d'adresses
+des trois étages et le multiplexeur d'opérande de l'ALU. Sur des
+technologies très exigeantes en fréquence, ce chemin pourrait
+devenir le chemin critique. Le coupage en deux étages
+(\texttt{control\_decode} et \texttt{control\_ex}) reste une
+direction d'optimisation envisageable.
+
+
+\subsection{Résolution précoce des sauts en ID}
+La résolution de \texttt{JAL} et \texttt{JALR} en ID, plutôt qu'en
+EX, économise un cycle de \textit{flush} sur chaque saut
+inconditionnel. La contrepartie est l'introduction de logique
+spécifique dans \texttt{mpt\_branchgen} (additionneur dédié et
+multiplexeur de renvoi local), qui aurait pu être mutualisée avec
+l'ALU au prix d'une cible de PC moins précoce.
+
+\subsection{Renvoi MEM-to-MEM}
+Le sélecteur \texttt{forwardM} évite un blocage dans le motif
+\og{}charge-puis-stocke immédiat\fg{} fréquent dans les routines de
+copie mémoire (\texttt{memcpy}). Le coût matériel est un
+multiplexeur 32~bits supplémentaire à l'entrée de
+\texttt{DMEM\_wr\_data\_o} ; le bénéfice est un cycle économisé
+sur des séquences typiques.
+
+\section{Extensions envisageables}
+\subsection{Extensions ISA}
+L'ajout de l'extension \texttt{M} demanderait un nouvel opérateur
+multi-cycles (\texttt{mpt\_mul} et \texttt{mpt\_div}) inséré
+parallèlement à l'ALU dans EX, ainsi qu'une extension du
+multiplexeur de sortie pour intégrer les résultats. La logique
+d'aléas devrait gérer le cas où la multiplication produit un
+résultat plusieurs cycles après son lancement, ce qui peut être
+fait en ajoutant un compteur de progression et un blocage du
+pipeline analogue au mécanisme charge-utilisation.
+
+L'extension \texttt{C} (instructions compressées de 16~bits)
+exigerait un module de pré-décodage en amont d'IF capable de
+recombiner deux demi-mots en une instruction RV32I étendue, ainsi
+qu'une logique d'alignement permettant de fetcher deux
+instructions par cycle dans certains cas. Cette modification est
+intrusive et touche à la fois IF et le décodeur.
+
+
+\subsection{Architecture privilégiée}
+L'ajout d'une architecture privilégiée minimale (mode machine
+uniquement) demande la réalisation d'un fichier CSR
+(\texttt{mtvec}, \texttt{mepc}, \texttt{mcause},
+\texttt{mtval}, \texttt{mstatus}, \texttt{mip}, \texttt{mie}) et
+d'un chemin de trappe synchrone : sur exception, le PC est dévié
+vers \texttt{mtvec}, l'adresse de retour est sauvegardée dans
+\texttt{mepc} et la cause dans \texttt{mcause}. Le signal
+\texttt{exception\_o} actuel constitue déjà le point d'entrée
+naturel de cette logique.
+
+\subsection{Prédiction de branchement}
+Une simple Branch Target Buffer (BTB) à index PC, complétée d'un
+prédicteur binaire à 2~bits par entrée, suffirait à réduire de
+moitié la pénalité moyenne des branchements pris. Le mécanisme de
+\textit{flush} existant continuerait à servir de filet de
+sécurité en cas de mauvaise prédiction.
+
+\subsection{Caches et bus standardisés}
+La transformation des ports IMEM et DMEM en ports AXI4-Lite, à
+côté d'une couche de cache associative à deux voies, permettrait
+l'intégration du c\oe{}ur dans un système sur puce moderne
+(par exemple basé sur un \textit{crossbar} AXI). Cette extension
+n'impacte pas le c\oe{}ur lui-même mais sa coque d'interface.
+
+
+%==============================================================================
+\chapter{Conclusion et perspectives}
+\label{ch:conclusion}
+
+Ce rapport a documenté la conception, l'implémentation et la
+vérification d'un c\oe{}ur RISC-V RV32I pipeliné à cinq étages,
+écrit en Verilog synthétisable et organisé en un module par étage
+sous un module enveloppe unique. Le c\oe{}ur incorpore une
+stratégie complète de gestion des aléas : renvoi à deux niveaux
+des opérandes ALU, renvoi MEM-to-MEM des données de stockage,
+blocage d'un cycle pour les aléas charge-utilisation et vidage
+sur deux cycles pour les aléas de contrôle. Toutes les décisions
+d'aléas sont centralisées dans un unique module
+\texttt{mpt\_control}, à l'exception de deux renvois locaux
+internes au banc de registres et au générateur d'adresses de
+branchement.
+
+La vérification fonctionnelle, conduite à l'aide de la suite
+officielle \texttt{rv32ui-p}, montre que les 42 tests passent sans
+exception ni dépassement du watchdog. Ce résultat apporte une
+preuve objective et reproductible de la conformité au sous-jeu
+utilisateur RV32I et constitue la principale contribution
+empirique du travail.
+
+Les perspectives identifiées sont, par ordre croissant
+d'intrusion : l'ajout d'un prédicteur de branchement à 2~bits
+indexé par PC ; l'implémentation d'un fichier CSR minimal et d'un
+chemin de trappe pour la gestion des exceptions matérielles ;
+l'intégration de l'extension \texttt{M} via un multiplieur et un
+diviseur multi-cycles parallèles à l'ALU ; et enfin la
+transformation des ports mémoire en ports AXI4-Lite, ouvrant la
+voie à une intégration complète dans un système sur puce.
+Chacune de ces extensions reste compatible avec la structure
+existante du c\oe{}ur, ce qui souligne la modularité de la
+conception présentée.
+
+
+%==============================================================================
+\appendix
+\chapter{Liste des figures et descriptions}
+\label{app:figures}
+
+\noindent Les emplacements suivants correspondent, dans l'ordre, à
+chaque balise \texttt{[FIGURE : \ldots]} insérée dans le corps du
+rapport. Chaque entrée est réservée pour une description technique
+détaillée de la figure correspondante, à fournir par l'auteur.
+
+\begin{description}
+  \item[Figure 1 --- Schéma bloc de plus haut niveau.]\hfill\\
+        \textit{[Description à compléter : entrées-sorties de plus
+        haut niveau, interfaces IMEM/DMEM, chemin de l'adresse de
+        démarrage, sortie \texttt{exception\_o}.]}
+
+  \item[Figure 2 --- Hiérarchie des modules de
+        \texttt{mpt\_top}.]\hfill\\
+        \textit{[Description à compléter : modules d'étage et
+        blocs partagés (décodage, contrôle, banc de registres,
+        ALU, génération de branchements).]}
+
+  \item[Figure 3 --- Chemin de données pipeliné.]\hfill\\
+        \textit{[Description à compléter : chemin de données à
+        cinq étages, registres pipeline inter-étages,
+        multiplexeurs de renvoi.]}
+
+  \item[Figure 4 --- Chemin de contrôle.]\hfill\\
+        \textit{[Description à compléter : génération du mot de
+        contrôle à l'étage ID, propagation à travers les
+        registres pipeline ID/EX, EX/MEM et MEM/WB.]}
+
+  \item[Figure 5 --- Détail de l'étage IF.]\hfill\\
+        \textit{[Description à compléter : multiplexeur 4-vers-1
+        d'entrée du PC, duplication
+        \texttt{IMEM\_addr\_o}/\texttt{IF\_pc\_o}, multiplexeur
+        d'injection de NOP par \texttt{flush\_i}.]}
+
+  \item[Figure 6 --- Architecture interne de l'étage ID.]\hfill\\
+        \textit{[Description à compléter : décodeur, banc de
+        registres, toujours-blocs synchrones de capture, contrôle
+        avec politique de bulle, latches internes, multiplexeur de
+        renvoi ID-WB.]}
+
+
+  \item[Figure 7 --- Vue interne de
+        \texttt{mpt\_branchgen}.]\hfill\\
+        \textit{[Description à compléter : multiplexeur
+        \texttt{PC\_RELATIVE}/\texttt{REG\_OFFSET},
+        additionneur 32~bits, renvoi local pour
+        \texttt{JALR}.]}
+
+  \item[Figure 8 --- Vue interne de l'étage MEM.]\hfill\\
+        \textit{[Description à compléter : décomposition
+        adresse/donnée, génération de
+        \texttt{DMEM\_wr\_byte\_en\_o}, unité d'extraction et
+        d'extension, multiplexeur \texttt{ForwardM}.]}
+
+  \item[Figure 9 --- Chronogramme d'aléa
+        charge-utilisation.]\hfill\\
+        \textit{[Description à compléter : trois cycles
+        consécutifs montrant le \texttt{LW}, la bulle insérée et
+        le renvoi MEM/WB.]}
+
+  \item[Figure 10 --- Vue synthétique de la stratégie
+        d'aléas.]\hfill\\
+        \textit{[Description à compléter : sources de
+        \texttt{forwardA}, \texttt{forwardB} et
+        \texttt{forwardM}, chemin de \texttt{stall\_o},
+        fenêtre de \textit{flush} sur deux cycles.]}
+
+  \item[Figure 11 --- Sortie du testbench en mode
+        régression.]\hfill\\
+        \textit{[Description à compléter : capture d'écran des
+        42 verdicts \texttt{[PASS]} et du récapitulatif
+        final.]}
+
+  \item[Figure 12 --- Forme d'onde GTKWave d'un test
+        typique.]\hfill\\
+        \textit{[Description à compléter : montée de
+        \texttt{x3}, \texttt{x17} et \texttt{x10} aux valeurs de
+        signature de succès.]}
+\end{description}
+
+\end{document}
